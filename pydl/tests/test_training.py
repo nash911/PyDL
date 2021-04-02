@@ -19,6 +19,46 @@ from pydl.training.training import SGD
 from pydl import conf
 
 class TestTraining(unittest.TestCase):
+    def test_split_data(self):
+        self.maxDiff = None
+        def test(X, y, train_size=70, test_size=30):
+            train = Training(nn=None)
+            train_X, train_y, test_X, test_y = train.split_data(X, y, train_size, test_size)
+            concat_X = np.vstack((train_X, test_X))
+            concat_y = np.vstack((train_y, test_y))
+
+            y_onehot = np.zeros((y.size, y.max()+1))
+            y_onehot[np.arange(y.size), y] = 1
+            Xy = np.sum(X * y_onehot, axis=-1, keepdims=False)
+            concat_Xy = np.sum(concat_X * concat_y, axis=-1, keepdims=False)
+
+            self.assertCountEqual(np.array(Xy, dtype=conf.dtype).tolist(),
+                                  np.array(concat_Xy, dtype=conf.dtype).tolist())
+            self.assertAlmostEqual(np.sum(Xy), np.sum(concat_Xy), places=5)
+
+        # Manually calculated
+        # -------------------
+        X = np.array([[1, 2, 3, 4],
+                      [2, 3, 4, 1],
+                      [3, 4, 1, 2],
+                      [4, 1, 2, 3]])
+        y = np.array([3, 2, 1, 0])
+        test(X, y)
+
+        # Combinatorial Test Cases
+        # ------------------------
+        batch_size = [8, 11, 100, 256]
+        feature_size = [1, 2, 3, 6, 11]
+        train_size = [0, 1, 5, 9.12345, 25.252525, 49.0, 70, 99.99]
+        for batch, feat, t_sz in list(itertools.product(batch_size, feature_size, train_size)):
+            X = np.random.uniform(-1, 1, (batch, feat))
+            y = np.random.randint(feat, size=(batch))
+            y[-1] = feat-1
+            test(X, y, t_sz, (100.0 - t_sz))
+
+
+
+
     def test_loss(self):
         def test(X, y, prob, true_out):
             train = Training(nn=None)

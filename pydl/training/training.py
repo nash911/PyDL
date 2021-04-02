@@ -38,13 +38,16 @@ class Training(ABC):
         y = y[order]
 
         # Convert labels to one-hot vector
-        y_onehot = np.zeros((y.size, y.max()+1))
+        if self._nn is None:
+            y_onehot = np.zeros((y.size, y.max()+1))
+        else:
+            y_onehot = np.zeros((y.size, self._nn.num_classes))
         y_onehot[np.arange(y.size), y] = 1
 
         train_X = np.array(X[:int(train_size * sample_size)], dtype=conf.dtype)
         train_y = np.array(y_onehot[:int(train_size * sample_size)], dtype=conf.dtype)
-        test_X = np.array(X[int(test_size * sample_size):], dtype=conf.dtype)
-        test_y = np.array(y_onehot[int(test_size * sample_size):], dtype=conf.dtype)
+        test_X = np.array(X[int(train_size * sample_size):], dtype=conf.dtype)
+        test_y = np.array(y_onehot[int(train_size * sample_size):], dtype=conf.dtype)
 
         return train_X, train_y, test_X, test_y
 
