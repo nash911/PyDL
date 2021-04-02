@@ -32,7 +32,6 @@ class TestSigmoid(unittest.TestCase):
             out_sig = sig.forward(inp)
             npt.assert_almost_equal(out_sig, true_out, decimal=5)
 
-
         # Manually calculated
         # -------------------
         X = np.zeros((2, 3), dtype=conf.dtype)
@@ -64,7 +63,6 @@ class TestSigmoid(unittest.TestCase):
             # Sigmoid function finite difference gradients
             npt.assert_almost_equal(sig_grad, sig_finite_diff, decimal=3)
 
-
         # Combinatorial Test Cases
         # ------------------------
         batch_size = [1, 2, 3, 6, 11, 256]
@@ -90,7 +88,6 @@ class TestSoftMax(unittest.TestCase):
             npt.assert_almost_equal(np.sum(out_softmax, axis=-1, keepdims=False),
                                     np.ones(out_softmax.shape[:-1], dtype=conf.dtype), decimal=5)
             npt.assert_almost_equal(out_softmax, true_out, decimal=5)
-
 
         # Manually calculated
         # -------------------
@@ -128,7 +125,6 @@ class TestSoftMax(unittest.TestCase):
             # Sigmoid function finite difference gradients
             npt.assert_almost_equal(softmax_grad, softmax_finite_diff, decimal=3)
 
-
         # Combinatorial Test Cases
         # ------------------------
         batch_size = [1, 2, 3, 6, 11, 25]
@@ -157,7 +153,6 @@ class TestReLU(unittest.TestCase):
             out_relu = relu.forward(inp)
             npt.assert_almost_equal(out_relu, true_out, decimal=5)
 
-
         # Manually calculated
         # -------------------
         X = np.array([[1.0, -3.2, -0.00001, 10, 0.000001],
@@ -165,7 +160,6 @@ class TestReLU(unittest.TestCase):
         true_out = np.array([[1.0, 0, 0, 10, 0.000001],
                              [4, 10, 0, 0, 10000]], dtype=conf.dtype)
         test(X, true_out)
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -204,7 +198,6 @@ class TestReLU(unittest.TestCase):
 
             # ReLU function finite difference gradients
             npt.assert_almost_equal(relu_grad, relu_finite_diff, decimal=3)
-
 
         # Combinatorial Test Cases
         # ------------------------

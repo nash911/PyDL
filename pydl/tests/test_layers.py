@@ -162,7 +162,6 @@ class TestLayers(unittest.TestCase):
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
 
-
         # Manually calculated - Unit input gradients
         X = np.array([[1, 2, 3],
                       [4, 5, 6]], dtype=conf.dtype)
