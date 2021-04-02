@@ -63,6 +63,10 @@ class Layer(ABC):
         return self._weights.size
 
     @property
+    def num_neurons(self):
+        return self._num_neurons
+
+    @property
     def activation(self):
         return self._activation_fn.type
 
@@ -209,6 +213,11 @@ class NN:
         self._layers = layers
         self._network_out = None
         self._name = name
+
+
+    @property
+    def num_classes(self):
+        return self._layers[-1].num_neurons
 
 
     def forward(self, inputs):
