@@ -80,8 +80,9 @@ class SoftMax(Activation):
         super().__init__(name=name, type='SoftMax')
 
     def forward(self, inputs):
-        self._inputs = inputs
-        self._outputs = np.exp(inputs) / np.sum(np.exp(inputs), axis=-1, keepdims=True)
+        # Normalization trick to avoid overflow
+        self._inputs = inputs - np.amax(inputs, axis=-1, keepdims=True)
+        self._outputs = np.exp(self._inputs) / np.sum(np.exp(self._inputs), axis=-1, keepdims=True)
         return self._outputs
 
     def backward(self, inp_grad, inputs=None):

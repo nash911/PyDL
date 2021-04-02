@@ -84,6 +84,7 @@ class TestSoftMax(unittest.TestCase):
         def test(inp, true_out):
             softmax = SoftMax()
             out_softmax = softmax.forward(inp)
+
             # Assert that the probabilities add up to 1.0
             npt.assert_almost_equal(np.sum(out_softmax, axis=-1, keepdims=False),
                                     np.ones(out_softmax.shape[:-1], dtype=conf.dtype), decimal=5)
@@ -99,11 +100,12 @@ class TestSoftMax(unittest.TestCase):
         # ------------------------
         batch_size = [1, 2, 3, 6, 11, 256]
         feature_size = [1, 2, 3, 6, 11, 10000]
-        uniform_range = [0.001, 0.01, 0.1, 1, 10]
+        uniform_range = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
 
         for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
             X = np.random.uniform(-rnge, rnge, (batch, feat))
-            true_out = np.exp(X) / np.sum(np.exp(X), axis=-1, keepdims=True)
+            X_normalized = X - np.amax(X, axis=-1, keepdims=True)
+            true_out = np.exp(X_normalized) / np.sum(np.exp(X_normalized), axis=-1, keepdims=True)
             test(X, true_out)
 
 
