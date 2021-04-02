@@ -24,6 +24,7 @@ class TestLayers(unittest.TestCase):
             npt.assert_almost_equal(out_fc, true_out, decimal=5)
 
         # Manually calculated
+        # -------------------
         X = np.array([[1, 2, 3],
                       [4, 5, 6]], dtype=conf.dtype)
         w = np.array([[1, 2, 3, 4],
@@ -487,7 +488,7 @@ class TestNN(unittest.TestCase):
 
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
 
-        for _ in range(50):
+        for _ in range(5):
             # NN Architecture
             # Layer 1 - Sigmoid
             X = np.random.uniform(-1, 1, (10, 25))
@@ -507,8 +508,8 @@ class TestNN(unittest.TestCase):
             b_4 = np.random.uniform(-1, 1, (1, 9))
 
             # Layer 5
-            w_5 = np.random.uniform(-1, 1, (w_4.shape[-1], 9))
-            b_5 = np.random.uniform(-1, 1, (1, 9))
+            w_5 = np.random.uniform(-1, 1, (w_4.shape[-1], 7))
+            b_5 = np.random.uniform(-1, 1, (1, 7))
 
             l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Sigmoid')
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid')
