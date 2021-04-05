@@ -103,12 +103,12 @@ class TestTraining(unittest.TestCase):
 
     def test_loss_gradient_finite_diff(self):
         self.delta = 1e-2
-        def test(X, y, layers):
+        def test(X, y, layers, reg_lambda=0):
             nn = NN(X, layers)
-            train = Training(nn)
+            train = Training(nn, reg_lambda=reg_lambda)
             loss = train.loss(X, y)
             loss_grad = train.loss_gradient(X, y)
-            inputs_grad = nn.backward(loss_grad)
+            inputs_grad = nn.backward(loss_grad, reg_lambda=reg_lambda)
 
             for n, layer in enumerate(layers):
                 w = layer.weights
@@ -176,7 +176,11 @@ class TestTraining(unittest.TestCase):
             y = np.random.randint(k, size=(X.shape[0]))
             y_onehot = np.zeros((y.size, y.max()+1))
             y_onehot[np.arange(y.size), y] = 1
-            test(X, y_onehot, layers)
+            test(X, y_onehot, layers, reg_lambda=0) # λ=0
+            test(X, y_onehot, layers, reg_lambda=1e-6) # λ=1e-6
+            test(X, y_onehot, layers, reg_lambda=1e-4) # λ=1e-4
+            test(X, y_onehot, layers, reg_lambda=1e-2) # λ=1e-2
+            test(X, y_onehot, layers, reg_lambda=1e-0) # λ=1.0
 
 
 if __name__ == '__main__':

@@ -154,7 +154,7 @@ class FC(Layer):
         else:
             return weighted_sum
 
-    def weight_gradients(self, inp_grad, inputs=None, summed=True):
+    def weight_gradients(self, inp_grad, reg_lambda=0, inputs=None, summed=True):
         if inputs is not None:
             self._inputs = inputs
         assert(self._inputs is not None)
@@ -163,6 +163,9 @@ class FC(Layer):
         grad = self._inputs[:,:,np.newaxis] * inp_grad[:,np.newaxis,:]
         if summed:
             grad = np.sum(grad, axis=0, keepdims=False)
+
+        if reg_lambda > 0:
+            grad += (reg_lambda * self._weights)
         return grad
 
     def bias_gradients(self, inp_grad, summed=True):
@@ -187,11 +190,11 @@ class FC(Layer):
         self._output = self._activation_fn.forward(self.score_fn(inputs))
         return self._output
 
-    def backward(self, inp_grad, inputs=None):
+    def backward(self, inp_grad, reg_lambda=0, inputs=None):
         # dy/dz: Gradient of the output of the layer w.r.t the logits 'z'
         activation_grad = self._activation_fn.backward(inp_grad)
 
-        self._weights_grad = self.weight_gradients(activation_grad, inputs)
+        self._weights_grad = self.weight_gradients(activation_grad, reg_lambda, inputs)
         if self._has_bias:
             self._bias_grad = self.bias_gradients(activation_grad)
 
@@ -220,6 +223,11 @@ class NN:
         return self._layers[-1].num_neurons
 
 
+    @property
+    def weights(self):
+        return [l.weights for l in self._layers]
+
+
     def forward(self, inputs):
         layer_inp = inputs
         for l in self._layers:
@@ -229,13 +237,13 @@ class NN:
         return self._network_out
 
 
-    def backward(self, inp_grad, inputs=None):
+    def backward(self, inp_grad, reg_lambda=0, inputs=None):
         if self._network_out is None:
             _ = self.forward(inputs)
 
         layer_inp_grad = inp_grad
         for l in reversed(self._layers):
-            layer_out_grad = l.backward(layer_inp_grad)
+            layer_out_grad = l.backward(layer_inp_grad, reg_lambda)
             layer_inp_grad = layer_out_grad
         self._network_out = None
         return layer_out_grad

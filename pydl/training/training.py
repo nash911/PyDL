@@ -19,8 +19,9 @@ class Training(ABC):
         name (str): Name of the training algorithm.
     """
 
-    def __init__(self, nn=None, name=None):
+    def __init__(self, nn=None, reg_lambda=1e-4, name=None):
         self._nn = nn
+        self._lambda = reg_lambda
         self._name = name
 
         self._train_X =  self._train_y = self._test_X = self._test_y = None
@@ -63,11 +64,20 @@ class Training(ABC):
         # -ln(σ(z))
         self._neg_ln_prob = -np.log(class_prob)
 
+        if self._nn is not None and self._lambda > 0:
+            nn_weights = self._nn.weights
+            regularization_loss = 0
+            for w in nn_weights:
+                regularization_loss += np.sum(w * w)
+            regularization_loss *= (0.5 * self._lambda)
+        else:
+            regularization_loss = 0
+
         # Cross-Entropy Cost Fn.
         if summed:
-            return np.sum(y * self._neg_ln_prob) / y.shape[0]
+            return (np.sum(y * self._neg_ln_prob) / y.shape[0]) + regularization_loss
         else:
-            return np.sum(y * self._neg_ln_prob, axis=-1)
+            return np.sum(y * self._neg_ln_prob, axis=-1) + regularization_loss
 
 
     def loss_gradient(self, X, y, prob=None):
@@ -81,7 +91,7 @@ class Training(ABC):
         return (y * (-1.0 / class_prob)) / y.shape[0]
 
 
-    def train(self, X, y):
+    def train(self, X, y, batch_size=256):
         self._train_X, self._train_y, self._test_X, self._test_y = self.split_data(X, y)
 
 

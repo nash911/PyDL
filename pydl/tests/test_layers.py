@@ -95,7 +95,7 @@ class TestLayers(unittest.TestCase):
         def test(inp, w, inp_grad, true_weights_grad, true_inputs_grad, bias=False,
                  true_bias_grad=None):
             fc = FC(inp, w.shape[-1], w, bias)
-            weights_grad = fc.weight_gradients(inp_grad, X)
+            weights_grad = fc.weight_gradients(inp_grad, inputs=X)
             bias_grad = fc.bias_gradients(inp_grad)
             inputs_grad = fc.input_gradients(inp_grad)
             npt.assert_almost_equal(weights_grad, true_weights_grad, decimal=5)
@@ -137,7 +137,7 @@ class TestLayers(unittest.TestCase):
         self.delta = 1e-2
         def test(inp, w, inp_grad, bias=False):
             fc = FC(inp, w.shape[-1], w, bias)
-            weights_grad = fc.weight_gradients(inp_grad, X)
+            weights_grad = fc.weight_gradients(inp_grad, inputs=X)
             inputs_grad = fc.input_gradients(inp_grad)
 
             # Weights finite difference gradients
