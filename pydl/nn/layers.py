@@ -79,10 +79,6 @@ class Layer(ABC):
         return self._weights_grad
 
     @property
-    def weights_grad(self):
-        return self._weights_grad
-
-    @property
     def bias_grad(self):
         return self._bias_grad
 
@@ -226,6 +222,11 @@ class NN:
     @property
     def weights(self):
         return [l.weights for l in self._layers]
+
+
+    @property
+    def layers(self):
+        return self._layers
 
 
     def forward(self, inputs):
