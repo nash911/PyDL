@@ -19,11 +19,13 @@ from pydl.training.training import SGD
 from pydl import conf
 
 class TestTraining(unittest.TestCase):
-    def test_split_data(self):
+    def test_shuffle_split_data(self):
         self.maxDiff = None
-        def test(X, y, train_size=70, test_size=30):
+        def test(X, y, shuffle, train_size=70, test_size=30):
             train = Training(nn=None)
-            train_X, train_y, test_X, test_y = train.split_data(X, y, train_size, test_size)
+            train_X, train_y, test_X, test_y = \
+                train.shuffle_split_data(X, y, shuffle=shuffle, train_size=train_size,
+                                         test_size=test_size)
             concat_X = np.vstack((train_X, test_X))
             concat_y = np.vstack((train_y, test_y))
 
@@ -43,20 +45,21 @@ class TestTraining(unittest.TestCase):
                       [3, 4, 1, 2],
                       [4, 1, 2, 3]])
         y = np.array([3, 2, 1, 0])
-        test(X, y)
+        test(X, y, shuffle=True)
+        test(X, y, shuffle=False)
 
         # Combinatorial Test Cases
         # ------------------------
         batch_size = [8, 11, 100, 256]
         feature_size = [1, 2, 3, 6, 11]
         train_size = [0, 1, 5, 9.12345, 25.252525, 49.0, 70, 99.99]
-        for batch, feat, t_sz in list(itertools.product(batch_size, feature_size, train_size)):
+        shuffle = [True, False]
+        for batch, feat, t_sz, shfl in list(itertools.product(batch_size, feature_size, train_size,
+                                                              shuffle)):
             X = np.random.uniform(-1, 1, (batch, feat))
             y = np.random.randint(feat, size=(batch))
             y[-1] = feat-1
-            test(X, y, t_sz, (100.0 - t_sz))
-
-
+            test(X, y, shfl, t_sz, (100.0 - t_sz))
 
 
     def test_loss(self):

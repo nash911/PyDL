@@ -25,26 +25,36 @@ class Training(ABC):
         self._nn = nn
         self._step_size = step_size
         self._lambda = reg_lambda
-        self._train_size = train_size / 100.0
-        self._test_size = test_size / 100.0
         self._name = name
+
+        if train_size + test_size == 100:
+            self._train_size = train_size / 100.0
+            self._test_size = test_size / 100.0
+        else:
+            self._train_size = int(train_size)
+            self._test_size = int(test_size)
 
         self._train_X =  self._train_y = self._test_X = self._test_y = None
         self._class_prob = None
         self._neg_ln_prob = None
 
 
-    def split_data(self, X, y, train_size=None, test_size=None):
+    def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None):
         sample_size = len(X)
 
         if train_size is None:
             train_size = self._train_size
+        else:
+            train_size = train_size / 100.0
         if test_size is None:
-            test_size = self._test_size / 100.0
+            test_size = self._test_size
+        else:
+            test_size = test_size / 100.0
 
-        order = np.random.permutation(sample_size)
-        X = X[order]
-        y = y[order]
+        if shuffle:
+            order = np.random.permutation(sample_size)
+            X = X[order]
+            y = y[order]
 
         # Convert labels to one-hot vector
         if self._nn is None:
@@ -53,10 +63,12 @@ class Training(ABC):
             y_onehot = np.zeros((y.size, self._nn.num_classes))
         y_onehot[np.arange(y.size), y] = 1
 
-        train_X = np.array(X[:int(train_size * sample_size)], dtype=conf.dtype)
-        train_y = np.array(y_onehot[:int(train_size * sample_size)], dtype=conf.dtype)
-        test_X = np.array(X[int(train_size * sample_size):], dtype=conf.dtype)
-        test_y = np.array(y_onehot[int(train_size * sample_size):], dtype=conf.dtype)
+        split_idx = int(train_size * sample_size) if train_size < 1 else train_size
+
+        train_X = np.array(X[:split_idx], dtype=conf.dtype)
+        train_y = np.array(y_onehot[:split_idx], dtype=conf.dtype)
+        test_X = np.array(X[split_idx:], dtype=conf.dtype)
+        test_y = np.array(y_onehot[split_idx:], dtype=conf.dtype)
 
         return train_X, train_y, test_X, test_y
 
@@ -112,15 +124,18 @@ class Training(ABC):
         return accuracy
 
 
-    def learning_curve_plot(self, fig, axs, train_loss, test_loss, accuracy):
+    def learning_curve_plot(self, fig, axs, train_loss, test_loss, train_accuracy, test_accuracy):
+        x_values = list(range(len(train_loss)))
+
         axs[0].clear()
-        axs[0].plot(list(range(len(train_loss))), train_loss, color='red', label='Train Loss')
-        axs[0].plot(list(range(len(test_loss))), test_loss, color='blue', label='Test Loss')
+        axs[0].plot(x_values, train_loss, color='red', label='Train Loss')
+        axs[0].plot(x_values, test_loss, color='blue', label='Test Loss')
         axs[0].set(ylabel='Loss')
         axs[0].legend(loc='upper right')
 
         axs[1].clear()
-        axs[1].plot(list(range(len(accuracy))), accuracy, color='green', label='Test Accuracy')
+        axs[1].plot(x_values, train_accuracy, color='red', label='Train Accuracy')
+        axs[1].plot(x_values, test_accuracy, color='blue', label='Test Accuracy')
         axs[1].set(ylabel='Accuracy(%)')
         axs[1].legend(loc='lower right')
 
@@ -128,16 +143,17 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, batch_size=256, epochs=100, plot=True):
+    def train(self, X, y, shuffle=True, batch_size=256, epochs=100, plot=True):
         self._train_X, self._train_y, self._test_X, self._test_y = \
-            self.split_data(X, y)
+            self.shuffle_split_data(X, y, shuffle=shuffle)
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
         if plot:
             fig, axs = plt.subplots(2, sharey=False, sharex=True)
         train_loss = list()
         test_loss = list()
-        accuracy = list()
+        train_accuracy = list()
+        test_accuracy = list()
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -156,17 +172,20 @@ class Training(ABC):
                     if l.bias is not None:
                         l.bias += -self._step_size * l.bias_grad
 
-                if e % 1000 == 0:
-                    test_l = self.loss(self._test_X, self._test_y)
-                    accur = self.evaluate(self._test_X, self._test_y)
-                    print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Accuracy: %.4f" %
-                          (e, train_l, test_l, accur))
+            if e % 1000 == 0:
+                test_l = self.loss(self._test_X, self._test_y)
+                train_accur = self.evaluate(self._train_X, self._train_y)
+                test_accur = self.evaluate(self._test_X, self._test_y)
+                print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
+                      (e, train_l, test_l, train_accur, test_accur))
 
-                    if plot:
-                        train_loss.append(train_l)
-                        test_loss.append(test_l)
-                        accuracy.append(accur)
-                        self.learning_curve_plot(fig, axs, train_loss, test_loss, accuracy)
+                if plot:
+                    train_loss.append(train_l)
+                    test_loss.append(test_l)
+                    train_accuracy.append(train_accur)
+                    test_accuracy.append(test_accur)
+                    self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
+                                             test_accuracy)
 
 
 
