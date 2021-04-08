@@ -39,6 +39,13 @@ class Training(ABC):
         self._neg_ln_prob = None
 
 
+    def normalize_data(self, X):
+        mean_centered = X - np.mean(X, axis=0, keepdims=True)
+        std = np.std(X, axis=0, keepdims=True)
+        std[std == 0] = 1
+        return mean_centered/std
+
+
     def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None):
         sample_size = len(X)
 
@@ -143,7 +150,12 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, shuffle=True, batch_size=256, epochs=100, plot=True):
+    def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, plot=True):
+        if normalize:
+            # Normalize data
+            X = self.normalize_data(X)
+
+        # Shuffle and split data into train and test sets
         self._train_X, self._train_y, self._test_X, self._test_y = \
             self.shuffle_split_data(X, y, shuffle=shuffle)
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
