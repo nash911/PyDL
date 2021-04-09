@@ -21,18 +21,20 @@ from pydl import conf
 class TestTraining(unittest.TestCase):
     def test_shuffle_split_data(self):
         self.maxDiff = None
-        def test(X, y, shuffle, train_size=70, test_size=30):
+        def test(X, y, y_onehot, shuffle, train_size=70, test_size=30, onehot=True):
             train = Training(nn=None)
             train_X, train_y, test_X, test_y = \
-                train.shuffle_split_data(X, y, shuffle=shuffle, train_size=train_size,
-                                         test_size=test_size)
+                train.shuffle_split_data(X, (y if onehot is True else y_onehot), shuffle=shuffle,
+                                         train_size=train_size, test_size=test_size, y_onehot=onehot)
             concat_X = np.vstack((train_X, test_X))
             concat_y = np.vstack((train_y, test_y))
 
-            y_onehot = np.zeros((y.size, y.max()+1))
-            y_onehot[np.arange(y.size), y] = 1
             Xy = np.sum(X * y_onehot, axis=-1, keepdims=False)
-            concat_Xy = np.sum(concat_X * concat_y, axis=-1, keepdims=False)
+
+            if len(concat_y.shape) == 1:
+                concat_Xy = X[range(y.size), y]
+            else:
+                concat_Xy = np.sum(concat_X * concat_y, axis=-1, keepdims=False)
 
             self.assertCountEqual(np.array(Xy, dtype=conf.dtype).tolist(),
                                   np.array(concat_Xy, dtype=conf.dtype).tolist())
@@ -45,8 +47,10 @@ class TestTraining(unittest.TestCase):
                       [3, 4, 1, 2],
                       [4, 1, 2, 3]])
         y = np.array([3, 2, 1, 0])
-        test(X, y, shuffle=True)
-        test(X, y, shuffle=False)
+        y_onehot = np.zeros((y.size, y.max()+1))
+        y_onehot[np.arange(y.size), y] = 1
+        test(X, y, y_onehot, shuffle=True, onehot=False)
+        test(X, y, y_onehot, shuffle=False, onehot=True)
 
         # Combinatorial Test Cases
         # ------------------------
@@ -54,19 +58,22 @@ class TestTraining(unittest.TestCase):
         feature_size = [1, 2, 3, 6, 11]
         train_size = [0, 1, 5, 9.12345, 25.252525, 49.0, 70, 99.99]
         shuffle = [True, False]
-        for batch, feat, t_sz, shfl in list(itertools.product(batch_size, feature_size, train_size,
-                                                              shuffle)):
+        onehot = [True, False]
+        for batch, feat, t_sz, shfl, oh in list(itertools.product(batch_size, feature_size,
+                                                                  train_size, shuffle, onehot)):
             X = np.random.uniform(-1, 1, (batch, feat))
             y = np.random.randint(feat, size=(batch))
             y[-1] = feat-1
-            test(X, y, shfl, t_sz, (100.0 - t_sz))
+            y_onehot = np.zeros((y.size, y.max()+1))
+            y_onehot[np.arange(y.size), y] = 1
+            test(X, y, y_onehot, shfl, t_sz, (100.0 - t_sz), oh)
 
 
     def test_loss(self):
         def test(X, y, prob, true_out):
             train = Training(nn=None)
             loss = train.loss(X, y, prob=prob)
-            self.assertEqual(loss, true_out)
+            self.assertAlmostEqual(loss, true_out, places=6)
 
         # Manually calculated
         # -------------------
@@ -81,12 +88,14 @@ class TestTraining(unittest.TestCase):
         y_onehot = np.zeros((y.size, y.max()+1))
         y_onehot[np.arange(y.size), y] = 1
         true_out = -np.log(0.4)
+        test(X, y, prob, true_out)
         test(X, y_onehot, prob, true_out)
         # Case-2
         y = np.array([0, 1, 2, 3])
         y_onehot = np.zeros((y.size, y.max()+1))
         y_onehot[np.arange(y.size), y] = 1
         true_out = ((-np.log(0.1) * 2) + (-np.log(0.3) * 2)) / 4
+        test(X, y, prob, true_out)
         test(X, y_onehot, prob, true_out)
 
         # Combinatorial Test Cases
@@ -101,6 +110,7 @@ class TestTraining(unittest.TestCase):
             y_onehot = np.zeros((y.size, y.max()+1))
             y_onehot[np.arange(y.size), y] = 1
             true_out = np.sum(y_onehot * -np.log(prob)) / batch
+            test(X, y, prob, true_out)
             test(X, y_onehot, prob, true_out)
 
 
@@ -176,14 +186,14 @@ class TestTraining(unittest.TestCase):
             # 5-Layers
             layers = [l1, l2, l3, l4, l5]
             k = layers[-1].shape[-1]
-            y = np.random.randint(k, size=(X.shape[0]))
-            y_onehot = np.zeros((y.size, y.max()+1))
-            y_onehot[np.arange(y.size), y] = 1
-            test(X, y_onehot, layers, reg_lambda=0) # λ=0
-            test(X, y_onehot, layers, reg_lambda=1e-6) # λ=1e-6
-            test(X, y_onehot, layers, reg_lambda=1e-4) # λ=1e-4
-            test(X, y_onehot, layers, reg_lambda=1e-2) # λ=1e-2
-            test(X, y_onehot, layers, reg_lambda=1e-0) # λ=1.0
+            labels = np.random.randint(k, size=(X.shape[0]))
+            labels_onehot = np.zeros((labels.size, labels.max()+1))
+            labels_onehot[np.arange(labels.size), labels] = 1
+
+            reg_list = [0, 1e-6, 1e-3, 1e-0]
+            y_list = [labels, labels_onehot]
+            for reg, y in list(itertools.product(reg_list, y_list)):
+                test(X, y, layers, reg_lambda=reg)
 
 
 if __name__ == '__main__':

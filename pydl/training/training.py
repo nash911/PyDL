@@ -10,6 +10,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 from pydl import conf
 
@@ -46,7 +47,8 @@ class Training(ABC):
         return mean_centered/std
 
 
-    def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None):
+    def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None,
+                           y_onehot=False):
         sample_size = len(X)
 
         if train_size is None:
@@ -63,24 +65,27 @@ class Training(ABC):
             X = X[order]
             y = y[order]
 
-        # Convert labels to one-hot vector
-        if self._nn is None:
-            y_onehot = np.zeros((y.size, y.max()+1))
+        if y_onehot and len(y.shape) == 1:
+            # Convert labels to one-hot vector
+            if self._nn is None:
+                labels = np.zeros((y.size, y.max()+1))
+            else:
+                labels = np.zeros((y.size, self._nn.num_classes))
+            labels[np.arange(y.size), y] = 1
         else:
-            y_onehot = np.zeros((y.size, self._nn.num_classes))
-        y_onehot[np.arange(y.size), y] = 1
+            labels = y
 
         split_idx = int(train_size * sample_size) if train_size < 1 else train_size
 
         train_X = np.array(X[:split_idx], dtype=conf.dtype)
-        train_y = np.array(y_onehot[:split_idx], dtype=conf.dtype)
+        train_y = np.array(labels[:split_idx], dtype=np.int32)
         test_X = np.array(X[split_idx:], dtype=conf.dtype)
-        test_y = np.array(y_onehot[split_idx:], dtype=conf.dtype)
+        test_y = np.array(labels[split_idx:], dtype=np.int32)
 
         return train_X, train_y, test_X, test_y
 
 
-    def loss(self, X, y, prob=None, summed=True):
+    def loss(self, X, y, prob=None):
         if prob is None:
             self._class_prob = self._nn.forward(X)
         else:
@@ -100,11 +105,12 @@ class Training(ABC):
         else:
             regularization_loss = 0
 
+        if len(y.shape) == 2: # y --> OneHot Representation
+            # Convert y to class labels
+            y = np.argmax(y, axis=-1)
+
         # Cross-Entropy Cost Fn.
-        if summed:
-            return (np.sum(y * self._neg_ln_prob) / y.shape[0]) + regularization_loss
-        else:
-            return np.sum(y * self._neg_ln_prob, axis=-1) + regularization_loss
+        return np.mean(self._neg_ln_prob[range(y.size), y]) + regularization_loss
 
 
     def loss_gradient(self, X, y, prob=None):
@@ -115,7 +121,12 @@ class Training(ABC):
         elif self._class_prob is None:
             self._class_prob = self._nn.forward(X)
 
-        loss_grad = (y * (-1.0 / self._class_prob)) / y.shape[0]
+        if len(y.shape) == 2: # y --> OneHot Representation
+            # Convert y to class labels
+            y = np.argmax(y, axis=-1)
+
+        loss_grad = np.zeros_like(self._class_prob)
+        loss_grad[range(y.size), y] = (-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
         self._class_prob = None
 
         return loss_grad
@@ -124,10 +135,14 @@ class Training(ABC):
     def evaluate(self, X, y):
         test_prob = self._nn.forward(X)
         pred = np.argmax(test_prob, axis=-1)
-        pred_onehot = np.zeros((pred.size, self._nn.num_classes))
-        pred_onehot[np.arange(pred.size), pred] = 1
-        pred_diff = np.sum(np.fabs(y - pred_onehot), axis=-1) / 2.0
-        accuracy = (1.0 - np.mean(pred_diff)) * 100.0
+
+        if len(y.shape) == 1: # y --> Class labels
+            accuracy = np.mean(pred == y) * 100.0
+        elif len(y.shape) == 2: # y --> OneHot Representation
+            pred_onehot = np.zeros((pred.size, self._nn.num_classes))
+            pred_onehot[np.arange(pred.size), pred] = 1
+            pred_diff = np.sum(np.fabs(y - pred_onehot), axis=-1) / 2.0
+            accuracy = (1.0 - np.mean(pred_diff)) * 100.0
         return accuracy
 
 
@@ -150,14 +165,16 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, plot=True):
+    def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
+              plot=True):
+        start_time = time.time()
         if normalize:
             # Normalize data
             X = self.normalize_data(X)
 
         # Shuffle and split data into train and test sets
         self._train_X, self._train_y, self._test_X, self._test_y = \
-            self.shuffle_split_data(X, y, shuffle=shuffle)
+            self.shuffle_split_data(X, y, shuffle=shuffle, y_onehot=y_onehot)
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
         if plot:
@@ -199,6 +216,8 @@ class Training(ABC):
                     self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
                                              test_accuracy)
 
+        end_time = time.time()
+        print("\nTraining Time: %.2f(s)" % (end_time-start_time))
 
 
 class SGD(Training):
