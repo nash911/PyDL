@@ -10,6 +10,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 import time
 
 from pydl import conf
@@ -22,11 +23,18 @@ class Training(ABC):
     """
 
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
-                 name=None):
+                 activatin_type=None, name=None):
         self._nn = nn
         self._step_size = step_size
         self._lambda = reg_lambda
         self._name = name
+
+        if activatin_type is not None:
+            self._activatin_type = activatin_type
+        elif nn is not None:
+            self._activatin_type = self._nn.layers[-1].activation
+        else:
+            sys.exit("Error: Please specify activation_type for instance of class Training")
 
         if train_size + test_size == 100:
             self._train_size = train_size / 100.0
@@ -37,7 +45,6 @@ class Training(ABC):
 
         self._train_X =  self._train_y = self._test_X = self._test_y = None
         self._class_prob = None
-        self._neg_ln_prob = None
 
 
     def normalize_data(self, X):
@@ -86,6 +93,24 @@ class Training(ABC):
 
 
     def loss(self, X, y, prob=None):
+        if 'softmax' in self._activatin_type.lower():
+            return self.softmax_cross_entropy_loss(X, y, prob)
+        elif 'sigmoid' in self._activatin_type.lower():
+            return self.sigmoid_cross_entropy_loss(X, y, prob)
+        else:
+            sys.exit("Error: Unknown activation_type: ", self._activation_fn)
+
+
+    def loss_gradient(self, X, y, prob=None):
+        if 'softmax' in self._activatin_type.lower():
+            return self.softmax_cross_entropy_gradient(X, y, prob)
+        elif 'sigmoid' in self._activatin_type.lower():
+            return self.sigmoid_cross_entropy_gradient(X, y, prob)
+        else:
+            sys.exit("Error: Unknown activation_type: ", self._activation_fn)
+
+
+    def softmax_cross_entropy_loss(self, X, y, prob=None):
         if prob is None:
             self._class_prob = self._nn.forward(X)
         else:
@@ -94,7 +119,7 @@ class Training(ABC):
             self._class_prob = prob
 
         # -ln(σ(z))
-        self._neg_ln_prob = -np.log(self._class_prob)
+        neg_ln_prob = -np.log(self._class_prob)
 
         if self._nn is not None and self._lambda > 0:
             nn_weights = self._nn.weights
@@ -110,10 +135,10 @@ class Training(ABC):
             y = np.argmax(y, axis=-1)
 
         # Cross-Entropy Cost Fn.
-        return np.mean(self._neg_ln_prob[range(y.size), y]) + regularization_loss
+        return np.mean(neg_ln_prob[range(y.size), y]) + regularization_loss
 
 
-    def loss_gradient(self, X, y, prob=None):
+    def softmax_cross_entropy_gradient(self, X, y, prob=None):
         if prob is not None:
             # sum_probs = np.sum(prob, axis=-1, keepdims=True)
             # ones = np.ones_like(sum_probs)
@@ -127,9 +152,63 @@ class Training(ABC):
 
         loss_grad = np.zeros_like(self._class_prob)
         loss_grad[range(y.size), y] = (-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
-        self._class_prob = None
 
+        self._class_prob = None
         return loss_grad
+
+
+    def sigmoid_cross_entropy_loss(self, X, y, prob=None):
+        if prob is None:
+            self._class_prob = self._nn.forward(X)
+        else:
+            self._class_prob = prob
+
+        with np.errstate(divide='ignore'):
+            # -ln(σ(z))
+            neg_ln_prob = -np.log(self._class_prob)
+
+            # -ln(1 - σ(z))
+            neg_ln_one_mns_prob = -np.log(1.0 - self._class_prob)
+
+        if len(y.shape) == 1: # y --> Class labels
+            neg_ln_one_mns_prob[range(y.size), y] = neg_ln_prob[range(y.size), y]
+            logistic_probs = neg_ln_one_mns_prob
+        elif len(y.shape) == 2: # y --> OneHot Representation
+            neg_ln_prob = np.nan_to_num(neg_ln_prob)
+            neg_ln_one_mns_prob = np.nan_to_num(neg_ln_one_mns_prob)
+            neg_ln_prob *= y
+            neg_ln_one_mns_prob *= (1.0 - y)
+            logistic_probs = neg_ln_prob + neg_ln_one_mns_prob
+
+        if self._nn is not None and self._lambda > 0:
+            nn_weights = self._nn.weights
+            regularization_loss = 0
+            for w in nn_weights:
+                regularization_loss += np.sum(w * w)
+            regularization_loss *= (0.5 * self._lambda)
+        else:
+            regularization_loss = 0
+
+        # Logistic Cost Fn.
+        return (np.sum(logistic_probs) / y.shape[0]) + regularization_loss
+
+
+    def sigmoid_cross_entropy_gradient(self, X, y, prob=None):
+        if prob is not None:
+            self._class_prob = prob
+        elif self._class_prob is None:
+            self._class_prob = self._nn.forward(X)
+
+        if len(y.shape) == 1: # y --> Class labels
+            loss_grad = (1.0 / (1.0 - self._class_prob))
+            loss_grad[range(y.size), y] = -1.0 / self._class_prob[range(y.size), y]
+        elif len(y.shape) == 2: # y --> OneHot Representation
+            neg_ln_prob_grad = np.nan_to_num(-1.0 / self._class_prob) * y
+            neg_ln_one_mns_prob_grad = np.nan_to_num(1.0 / (1.0 - self._class_prob)) * (1 - y)
+            loss_grad = neg_ln_prob_grad + neg_ln_one_mns_prob_grad
+
+        self._class_prob = None
+        return loss_grad / y.shape[0]
 
 
     def evaluate(self, X, y):
