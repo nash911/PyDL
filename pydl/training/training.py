@@ -225,6 +225,22 @@ class Training(ABC):
         return accuracy
 
 
+    def print_log(self, epoch, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
+                  test_accuracy):
+        test_l = self.loss(self._test_X, self._test_y)
+        train_accur = self.evaluate(self._train_X, self._train_y)
+        test_accur = self.evaluate(self._test_X, self._test_y)
+        print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
+              (epoch, train_l, test_l, train_accur, test_accur))
+
+        if plot:
+            train_loss.append(train_l)
+            test_loss.append(test_l)
+            train_accuracy.append(train_accur)
+            test_accuracy.append(test_accur)
+            self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
+                                     test_accuracy)
+
     def learning_curve_plot(self, fig, axs, train_loss, test_loss, train_accuracy, test_accuracy):
         x_values = list(range(len(train_loss)))
 
@@ -245,7 +261,7 @@ class Training(ABC):
 
 
     def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
-              plot=True):
+              plot=True, log_freq=1000):
         start_time = time.time()
         if normalize:
             # Normalize data
@@ -258,10 +274,17 @@ class Training(ABC):
 
         if plot:
             fig, axs = plt.subplots(2, sharey=False, sharex=True)
+        else:
+            fig = axs = None
+
         train_loss = list()
         test_loss = list()
         train_accuracy = list()
         test_accuracy = list()
+
+        init_train_l = self.loss(self._train_X, self._train_y)
+        self.print_log(0, plot, fig, axs, init_train_l, train_loss, test_loss, train_accuracy,
+                       test_accuracy)
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -280,20 +303,9 @@ class Training(ABC):
                     if l.bias is not None:
                         l.bias += -self._step_size * l.bias_grad
 
-            if e % 1000 == 0:
-                test_l = self.loss(self._test_X, self._test_y)
-                train_accur = self.evaluate(self._train_X, self._train_y)
-                test_accur = self.evaluate(self._test_X, self._test_y)
-                print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
-                      (e, train_l, test_l, train_accur, test_accur))
-
-                if plot:
-                    train_loss.append(train_l)
-                    test_loss.append(test_l)
-                    train_accuracy.append(train_accur)
-                    test_accuracy.append(test_accur)
-                    self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
-                                             test_accuracy)
+            if (e+1) % log_freq == 0:
+                self.print_log(e+1, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
+                               test_accuracy)
 
         end_time = time.time()
         print("\nTraining Time: %.2f(s)" % (end_time-start_time))
