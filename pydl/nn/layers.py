@@ -113,8 +113,8 @@ class FC(Layer):
     """The Hidden Layer Class
     """
 
-    def __init__(self, inputs, num_neurons=None, weights=None, bias=False, activation_fn='Sigmoid',
-                 name=None):
+    def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_range=(-1, 1),
+                 activation_fn='Sigmoid', name=None):
         super().__init__(name=name)
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
@@ -128,12 +128,13 @@ class FC(Layer):
                 self._num_neurons = weights.shape[-1]
             self._weights = weights
         else:
-            self._weights = np.random.uniform(-1, 1, (self._inp_size, self._num_neurons))
+            self._weights = np.random.uniform(weight_range[0], weight_range[1], (self._inp_size,
+                                                                                 self._num_neurons))
 
         if type(bias) == np.ndarray:
             self._bias = bias
         elif bias:
-            self._bias = np.random.uniform(-1, 1, (self._num_neurons))
+            self._bias = np.zeros(self._num_neurons, dtype=conf.dtype)
         else:
             self._bias = None
 

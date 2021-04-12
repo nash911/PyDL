@@ -199,33 +199,14 @@ class TestTraining(unittest.TestCase):
         for _ in range(5):
             # Manually calculated
             # NN Architecture
-            # Layer 1
             X = np.random.uniform(-1, 1, (100, 25))
-            w_1 = np.random.uniform(-1, 1, (X.shape[-1], 19))
-            b_1 = np.random.uniform(-1, 1, (1, 19))
 
-            # Layer 2
-            w_2 = np.random.uniform(-1, 1, (w_1.shape[-1], 15))
-            b_2 = np.random.uniform(-1, 1, (1, 15))
-
-            # Layer 3
-            w_3 = np.random.uniform(-1, 1, (w_2.shape[-1], 11))
-            b_3 = np.random.uniform(-1, 1, (1, 11))
-
-            # Layer 4
-            w_4 = np.random.uniform(-1, 1, (w_3.shape[-1], 9))
-            b_4 = np.random.uniform(-1, 1, (1, 9))
-
-            # Layer 5
-            w_5 = np.random.uniform(-1, 1, (w_4.shape[-1], 7))
-            b_5 = np.random.uniform(-1, 1, (1, 7))
-
-            l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Sigmoid')
-            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid')
-            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='Sigmoid')
-            l4 = FC(l3, w_4.shape[-1], w_4, b_4, activation_fn='Sigmoid')
-            l5_a = FC(l4, w_5.shape[-1], w_5, b_5, activation_fn='SoftMax') # SoftMax Probs
-            l5_b = FC(l4, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid') # Sigmoid Probs
+            l1 = FC(X, num_neurons=19, activation_fn='Sigmoid')
+            l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid')
+            l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid')
+            l4 = FC(l3, num_neurons=9, activation_fn='Sigmoid')
+            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax') # SoftMax Probs
+            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid') # Sigmoid Probs
 
             # SoftMax Probs
             layers = [l1, l2, l3, l4, l5_a]
