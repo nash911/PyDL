@@ -10,6 +10,7 @@
 import abc
 from abc import ABC, abstractmethod
 import numpy as np
+import itertools
 
 from pydl import conf
 
@@ -91,10 +92,20 @@ class SoftMax(Activation):
         elif inputs is not None:
             self.forward(inputs)
 
-        delta_ij = np.array([np.eye(inp_grad.shape[-1])]*inp_grad.shape[0]) * \
-                   self._outputs[:,np.newaxis,:]
+        batch_size = self._outputs.shape[0]
+        num_neurons = self._outputs.shape[-1]
+
+        # A syntactic sugar implementation
+        delta_ij = np.array([np.eye(num_neurons)]*batch_size) * self._outputs[:,np.newaxis,:]
         out_grad = np.sum((-(self._outputs[:,:,np.newaxis] * self._outputs[:,np.newaxis,:]) +
                            delta_ij) * inp_grad[:,np.newaxis,:], axis=-1)
+
+        # # Syntactic sugar implementation - Has a slight better performance (~5%)
+        # out_squared = -(self._outputs[:,:,np.newaxis] * self._outputs[:,np.newaxis,:])
+        # diag_indx = list(range(num_neurons)) * batch_size
+        # out_squared[list(itertools.chain.from_iterable(itertools.repeat(b, num_neurons) for b in
+        #             range(batch_size))), diag_indx, diag_indx] += np.reshape(self._outputs, (-1))
+        # out_grad = np.sum(out_squared * inp_grad[:,np.newaxis,:], axis=-1)
 
         self._outputs = None
         return out_grad

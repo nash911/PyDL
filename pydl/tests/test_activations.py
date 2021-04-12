@@ -129,7 +129,7 @@ class TestSoftMax(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 25]
+        batch_size = [1, 2, 3, 6, 11, 256]
         feature_size = [1, 2, 3, 6, 11, 25]
         inp_range = [0.001, 0.01, 0.1, 1, 10]
         grad_range = [0.001, 0.01, 0.1, 1, 10]
