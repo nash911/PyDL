@@ -13,6 +13,7 @@ import numpy.testing as npt
 import itertools
 
 from pydl.nn.activations import Sigmoid
+from pydl.nn.activations import Tanh
 from pydl.nn.activations import SoftMax
 from pydl.nn.activations import ReLU
 from pydl import conf
@@ -62,6 +63,68 @@ class TestSigmoid(unittest.TestCase):
 
             # Sigmoid function finite difference gradients
             npt.assert_almost_equal(sig_grad, sig_finite_diff, decimal=3)
+
+        # Combinatorial Test Cases
+        # ------------------------
+        batch_size = [1, 2, 3, 6, 11, 256]
+        feature_size = [1, 2, 3, 6, 11, 10000]
+        inp_range = [0.001, 0.01, 0.1, 1, 10]
+        grad_range = [0.001, 0.01, 0.1, 1, 10]
+        unit_inp_grad = [True, False]
+
+        for batch, feat, i_rnge, g_rnge, unit in \
+            list(itertools.product(batch_size, feature_size, inp_range, grad_range, unit_inp_grad)):
+            X = np.random.uniform(-i_rnge, i_rnge, (batch, feat))
+            inp_grad = np.ones((batch, feat), dtype=conf.dtype) if unit else \
+                       np.random.uniform(-g_rnge, g_rnge, (batch, feat))
+            test(X, inp_grad)
+
+
+class TestTanh(unittest.TestCase):
+    def test_tanh_name(self):
+        def test(name):
+            tanh = Tanh(name)
+            self.assertEqual(tanh.name, name)
+
+        name = 'Tanh_1'
+        test(name)
+
+    def test_tanh_forward(self):
+        def test(inp, true_out):
+            tanh = Tanh()
+            out_tanh = tanh.forward(inp)
+            npt.assert_almost_equal(out_tanh, true_out, decimal=5)
+
+        # Manually calculated
+        # -------------------
+        X = np.zeros((2, 3), dtype=conf.dtype)
+        true_out = np.zeros((2, 3), dtype=conf.dtype)
+        test(X, true_out)
+
+        # Combinatorial Test Cases
+        # ------------------------
+        batch_size = [1, 2, 3, 6, 11, 256]
+        feature_size = [1, 2, 3, 6, 11, 10000]
+        uniform_range = [0.001, 0.01, 0.1, 1, 10]
+
+        for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
+            X = np.random.uniform(-rnge, rnge, (batch, feat))
+            true_out = (np.exp(X) - np.exp(-X)) / (np.exp(X) + np.exp(-X))
+            test(X, true_out)
+
+
+    def test_gradients_finite_difference(self):
+        self.delta = 1e-2
+        def test(inp, inp_grad):
+            tanh = Tanh()
+            tanh_grad = tanh.backward(inp_grad, inp)
+
+            delta = np.full(tanh_grad.shape, self.delta, dtype=conf.dtype)
+            tanh_finite_diff = ((tanh.forward(inp + delta) - tanh.forward(inp - delta)) /
+                                (2 * self.delta))  * inp_grad
+
+            # Tanh function finite difference gradients
+            npt.assert_almost_equal(tanh_grad, tanh_finite_diff, decimal=3)
 
         # Combinatorial Test Cases
         # ------------------------

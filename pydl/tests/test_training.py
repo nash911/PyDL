@@ -158,7 +158,7 @@ class TestTraining(unittest.TestCase):
 
 
     def test_loss_gradient_finite_diff(self):
-        self.delta = 1e-2
+        self.delta = 1e-3
         def test(X, y, layers, reg_lambda=0):
             nn = NN(X, layers)
             train = Training(nn, reg_lambda=reg_lambda)
@@ -194,17 +194,17 @@ class TestTraining(unittest.TestCase):
                     inputs_finite_diff[i,j] = ((train.loss(X + i_delta, y) -
                                                 train.loss(X - i_delta, y)) / (2 * self.delta))
 
-            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
+            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=5)
 
-        for _ in range(5):
+        for _ in range(1):
             # Manually calculated
             # NN Architecture
             X = np.random.uniform(-1, 1, (100, 25))
 
-            l1 = FC(X, num_neurons=19, activation_fn='Sigmoid')
+            l1 = FC(X, num_neurons=19, activation_fn='Tanh')
             l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid')
             l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid')
-            l4 = FC(l3, num_neurons=9, activation_fn='Sigmoid')
+            l4 = FC(l3, num_neurons=9, activation_fn='Tanh')
             l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax') # SoftMax Probs
             l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid') # Sigmoid Probs
 

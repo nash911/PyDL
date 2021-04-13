@@ -73,6 +73,32 @@ class Sigmoid(Activation):
         return out_grad
 
 
+class Tanh(Activation):
+    """The Tanh Class
+    """
+
+    def __init__(self, name=None):
+        super().__init__(name=name, type='Tanh')
+
+
+    def forward(self, inputs):
+        self._inputs = inputs
+        self._outputs = (2.0 / (1.0 + np.exp(-2.0*inputs))) - 1.0
+        return self._outputs
+
+    def backward(self, inp_grad, inputs=None):
+        if self._outputs is None:
+            self.forward(inputs)
+        elif inputs is not None:
+            self.forward(inputs)
+
+        # Gradient of the output of the sigmoid fn w.r.t the logits 'z'
+        # d/dz tanh(z) = (1 - tanh^2(z))
+        out_grad = (1.0 - (self._outputs * self._outputs)) * inp_grad
+        self._outputs = None
+        return out_grad
+
+
 class SoftMax(Activation):
     """The SoftMax Class
     """

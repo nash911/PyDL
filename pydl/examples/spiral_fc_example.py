@@ -38,8 +38,12 @@ def main():
     print("Data STD: ", np.std(X, axis=0))
 
     # Visualize Data:
+    fig = plt.figure()
     plt.scatter(X[:, 0], X[:, 1], c=y, s=40, cmap=plt.cm.Spectral)
-    plt.show()
+    plt.draw()
+    plt.waitforbuttonpress(0)
+    plt.close(fig)
+
 
     # SoftMax Cross Entropy
     l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
@@ -51,6 +55,7 @@ def main():
     train.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
+    l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
     l2 = FC(l1, num_neurons=K, bias=True, activation_fn='Sigmoid')
     layers = [l1, l2]
 

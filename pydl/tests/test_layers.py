@@ -55,7 +55,7 @@ class TestLayers(unittest.TestCase):
 
     def test_forward(self):
         def test(inp, w, true_out, bias=False, activation_fn='Sigmoid'):
-            fc = FC(inp, w.shape[-1], w, bias)
+            fc = FC(inp, w.shape[-1], w, bias, activation_fn=activation_fn)
             out_fc = fc.forward(inp)
             npt.assert_almost_equal(out_fc, true_out, decimal=5)
 
@@ -85,10 +85,19 @@ class TestLayers(unittest.TestCase):
             X = np.random.uniform(-rnge, rnge, (batch, feat))
             w = np.random.uniform(-rnge, rnge, (feat, neur))
             bias = np.random.uniform(-rnge, rnge, (neur))
-            true_out = 1.0 / (1.0 + np.exp(-np.matmul(X, w)))
-            test(X, w, true_out, bias=False)
-            true_out = 1.0 / (1.0 + np.exp(-(np.matmul(X, w) + bias)))
-            test(X, w, true_out, bias)
+            score = np.matmul(X, w) + bias
+
+            true_out_sig = 1.0 / (1.0 + np.exp(-np.matmul(X, w)))
+            test(X, w, true_out_sig, bias=False, activation_fn='Sigmoid')
+
+            true_out_sig = 1.0 / (1.0 + np.exp(-score))
+            test(X, w, true_out_sig, bias, activation_fn='Sigmoid')
+
+            true_out_tanh = (2.0 / (1.0 + np.exp(-2.0 * score))) - 1.0
+            test(X, w, true_out_tanh, bias, activation_fn='Tanh')
+
+            true_out_relu = np.maximum(0, score)
+            test(X, w, true_out_relu, bias, activation_fn='ReLU')
 
 
     def test_gradients_manually(self):
@@ -204,7 +213,7 @@ class TestLayers(unittest.TestCase):
 
 
     def test_backward_gradients_finite_difference(self):
-        self.delta = 1e-2
+        self.delta = 1e-3
         def test_with_sigmoid(inp, w, inp_grad, bias=False):
             fc = FC(inp, w.shape[-1], w, bias, activation_fn='Sigmoid')
             y = fc.forward(inp)
@@ -212,6 +221,39 @@ class TestLayers(unittest.TestCase):
             weights_grad = fc.weights_grad
 
             # For Sigmoid Activation Fn.
+            # Weights finite difference gradients
+            weights_finite_diff = np.empty(weights_grad.shape)
+            for i in range(weights_grad.shape[0]):
+                w_delta = np.zeros(w.shape, dtype=conf.dtype)
+                w_delta[i] = self.delta
+                fc.weights = w + w_delta
+                lhs = fc.forward(inp)
+                fc.weights = w - w_delta
+                rhs = fc.forward(inp)
+                weights_finite_diff[i] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad, axis=0)
+
+            # Inputs finite difference gradients
+            inputs_finite_diff = np.empty(inputs_grad.shape)
+            fc.weights = w
+            for i in range(inputs_grad.shape[1]):
+                i_delta = np.zeros(inp.shape, dtype=conf.dtype)
+                i_delta[:,i] = self.delta
+                inputs_finite_diff[:,i] = np.sum(((fc.forward(inp + i_delta) -
+                                                   fc.forward(inp - i_delta)) /
+                                                   (2 * self.delta)) * inp_grad, axis=-1,
+                                                 keepdims=False)
+
+            npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
+            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
+
+
+        def test_with_tanh(inp, w, inp_grad, bias=False):
+            fc = FC(inp, w.shape[-1], w, bias, activation_fn='Tanh')
+            y = fc.forward(inp)
+            inputs_grad = fc.backward(inp_grad)
+            weights_grad = fc.weights_grad
+
+            # For Tanh Activation Fn.
             # Weights finite difference gradients
             weights_finite_diff = np.empty(weights_grad.shape)
             for i in range(weights_grad.shape[0]):
@@ -372,6 +414,7 @@ class TestLayers(unittest.TestCase):
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
                        np.random.uniform(-10, 10, (batch, neur))
             test_with_sigmoid(X, w, inp_grad, bias)
+            test_with_tanh(X, w, inp_grad, bias)
             test_with_softmax(X, w, inp_grad, bias)
             test_with_relu(X, w, inp_grad, bias)
 
@@ -401,7 +444,7 @@ class TestNN(unittest.TestCase):
         w_3 = np.random.uniform(-1, 1, (l2_out.shape[-1], 11))
         b_3 = np.random.uniform(-1, 1, (1, 11))
         l3_score = np.matmul(l2_out, w_3) + b_3
-        l3_out = 1.0 / (1.0 + np.exp(-(l3_score)))
+        l3_out = (2.0 / (1.0 + np.exp(-2.0*(l3_score)))) - 1.0
 
         # Layer 4
         w_4 = np.random.uniform(-1, 1, (l3_out.shape[-1], 9))
@@ -417,7 +460,7 @@ class TestNN(unittest.TestCase):
 
         l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Sigmoid')
         l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='ReLU')
-        l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='Sigmoid')
+        l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='Tanh')
         l4 = FC(l3, w_4.shape[-1], w_4, b_4, activation_fn='ReLU')
         l5 = FC(l4, w_5.shape[-1], w_5, b_5, activation_fn='SoftMax')
 
@@ -432,7 +475,7 @@ class TestNN(unittest.TestCase):
 
 
     def test_backward(self):
-        self.delta = 1e-2
+        self.delta = 1e-3
         def test(inp, layers):
             nn = NN(inp, layers)
             nn_out = nn.forward(inp)
@@ -487,7 +530,7 @@ class TestNN(unittest.TestCase):
 
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
 
-        for _ in range(5):
+        for _ in range(1):
             # NN Architecture
             # Layer 1 - Sigmoid
             X = np.random.uniform(-1, 1, (10, 25))
@@ -510,9 +553,9 @@ class TestNN(unittest.TestCase):
             w_5 = np.random.uniform(-1, 1, (w_4.shape[-1], 7))
             b_5 = np.random.uniform(-1, 1, (1, 7))
 
-            l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Sigmoid')
+            l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh')
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid')
-            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='Sigmoid')
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='Tanh')
             l4 = FC(l3, w_4.shape[-1], w_4, b_4, activation_fn='Sigmoid')
             l5 = FC(l4, w_5.shape[-1], w_5, b_5, activation_fn='SoftMax')
 

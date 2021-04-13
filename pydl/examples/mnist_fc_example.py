@@ -23,6 +23,7 @@ def main():
     K = np.max(y) + 1
 
     # plot first few images
+    fig = plt.figure()
     for i, r in enumerate(np.random.randint(0, y.size, 9)):
         # define subplot
         plt.subplot(330 + 1 + i)
@@ -31,7 +32,9 @@ def main():
         plt.title(str(y[r]))
 
     # show the figure
-    plt.show()
+    plt.draw()
+    plt.waitforbuttonpress(0)
+    plt.close(fig)
 
     weight_range = (-0.01, 0.01)
     l1 = FC(X, num_neurons=1000, bias=True, weight_range=weight_range, activation_fn='ReLU')

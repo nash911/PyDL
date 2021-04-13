@@ -11,11 +11,13 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from pydl.nn.activations import Sigmoid
+from pydl.nn.activations import Tanh
 from pydl.nn.activations import SoftMax
 from pydl.nn.activations import ReLU
 from pydl import conf
 
 activations = {'sigmoid' : Sigmoid,
+               'tanh' : Tanh,
                'softmax' : SoftMax,
                'relu' : ReLU
               }

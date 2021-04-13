@@ -31,17 +31,18 @@ def main():
     print("Data STD: ", np.std(X, axis=0))
 
     # SoftMax Cross Entropy
-    l1 = FC(X, num_neurons=int(X.shape[-1]), bias=True, weight_range=(-1, 1), activation_fn='ReLU')
-    l2 = FC(l1, num_neurons=K, bias=True, weight_range=(-1, 1), activation_fn='SoftMax')
-    layers = [l1, l2]
+    l1 = FC(X, num_neurons=int(X.shape[-1]*2), bias=True, weight_range=(-1, 1), activation_fn='ReLU')
+    l2 = FC(l1, num_neurons=int(X.shape[-1]), bias=True, weight_range=(-1, 1), activation_fn='Tanh')
+    l3_a = FC(l2, num_neurons=K, bias=True, weight_range=(-1, 1), activation_fn='SoftMax')
+    layers = [l1, l2, l3_a]
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
     train.train(X, y, normalize=True, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
-    l2 = FC(l1, num_neurons=K, bias=True, weight_range=(-1, 1), activation_fn='SoftMax')
-    layers = [l1, l2]
+    l3_b = FC(l2, num_neurons=K, bias=True, weight_range=(-1, 1), activation_fn='Sigmoid')
+    layers = [l1, l2, l3_b]
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
