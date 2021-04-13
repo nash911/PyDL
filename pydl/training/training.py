@@ -47,11 +47,17 @@ class Training(ABC):
         self._class_prob = None
 
 
-    def normalize_data(self, X):
-        mean_centered = X - np.mean(X, axis=0, keepdims=True)
-        std = np.std(X, axis=0, keepdims=True)
-        std[std == 0] = 1
-        return mean_centered/std
+    def normalize_data(self, X, mean=None, std=None):
+        if mean is None:
+            mean = np.mean(X, axis=0, keepdims=True)
+
+        if std is None:
+            std = np.std(X, axis=0, keepdims=True)
+            std[std == 0] = 1
+
+        mean_centered = X - mean
+        normalized = mean_centered/std
+        return mean, std, normalized
 
 
     def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None,
@@ -263,14 +269,16 @@ class Training(ABC):
     def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
               plot=True, log_freq=1000):
         start_time = time.time()
-        if normalize:
-            # Normalize data
-            X = self.normalize_data(X)
 
         # Shuffle and split data into train and test sets
         self._train_X, self._train_y, self._test_X, self._test_y = \
             self.shuffle_split_data(X, y, shuffle=shuffle, y_onehot=y_onehot)
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
+
+        if normalize:
+            # Normalize data
+            mean, std, self._train_X = self.normalize_data(self._train_X)
+            _, _, self._test_X = self.normalize_data(self._test_X, mean, std)
 
         if plot:
             fig, axs = plt.subplots(2, sharey=False, sharex=True)
