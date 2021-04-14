@@ -116,11 +116,12 @@ class FC(Layer):
     """
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_scale=1.0,
-                 activation_fn='Sigmoid', name=None):
+                 xavier=True, activation_fn='Sigmoid', name=None):
         super().__init__(name=name)
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
         self._weight_scale = weight_scale
+        self._xavier = xavier
         self._has_bias = True if type(bias) == np.ndarray else bias
         self._activation_fn = activations[activation_fn.lower()]()
 
@@ -132,6 +133,13 @@ class FC(Layer):
             self._weights = weights
         else:
             self._weights = np.random.randn(self._inp_size, self._num_neurons) * weight_scale
+            if xavier:
+                # Apply Xavier Initialization
+                if self._activation_fn.type.lower() == 'relu':
+                    norm_fctr = np.sqrt(self._inp_size/2.0)
+                else:
+                    norm_fctr = np.sqrt(self._inp_size)
+                self._weights /= norm_fctr
 
         if type(bias) == np.ndarray:
             self._bias = bias
@@ -144,7 +152,20 @@ class FC(Layer):
     def reinitialize_weights(self, inputs=None, num_neurons=None):
         num_feat = self._inp_size if inputs is None else inputs.shape[-1]
         num_neurons = self._num_neurons if num_neurons is None else num_neurons
+
+        # Reinitialize weights
         self._weights = np.random.randn(num_feat, num_neurons) * self._weight_scale
+        if self._xavier:
+            # Apply Xavier Initialization
+            if self._activation_fn.type.lower() == 'relu':
+                norm_fctr = np.sqrt(num_feat/2.0)
+            else:
+                norm_fctr = np.sqrt(num_feat)
+            self._weights /= norm_fctr
+
+        # Reset layer size
+        self._inp_size = num_feat
+        self._num_neurons = num_neurons
 
         if self._has_bias:
             self._bias = np.zeros(num_neurons, dtype=conf.dtype)

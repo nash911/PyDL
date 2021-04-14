@@ -36,9 +36,11 @@ def main():
     plt.waitforbuttonpress(0)
     plt.close(fig)
 
-    weight_scale = 0.001
-    l1 = FC(X, num_neurons=400, bias=True, weight_scale=weight_scale, activation_fn='ReLU')
-    l2 = FC(l1, num_neurons=K, bias=True, weight_scale=weight_scale, activation_fn='SoftMax')
+    weight_scale = 0.01
+    l1 = FC(X, num_neurons=400, bias=True, weight_scale=weight_scale, xavier=True,
+            activation_fn='ReLU')
+    l2 = FC(l1, num_neurons=K, bias=True, weight_scale=weight_scale, xavier=True,
+            activation_fn='SoftMax')
     layers = [l1, l2]
 
     nn = NN(X, layers)
