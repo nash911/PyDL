@@ -52,7 +52,7 @@ def main():
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-2, reg_lambda=1e-3)
-    train.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot=True)
+    train.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
     l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')

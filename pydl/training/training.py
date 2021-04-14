@@ -47,7 +47,7 @@ class Training(ABC):
         self._class_prob = None
 
 
-    def normalize_data(self, X, mean=None, std=None):
+    def mean_normalize(self, X, mean=None, std=None):
         if mean is None:
             mean = np.mean(X, axis=0, keepdims=True)
 
@@ -58,6 +58,40 @@ class Training(ABC):
         mean_centered = X - mean
         normalized = mean_centered/std
         return mean, std, normalized
+
+
+    def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
+        if mean is None:
+            mean = np.mean(X, axis=0, keepdims=True)
+
+        if N is None:
+            N = X.shape[0]
+
+        X -= mean
+        cov = np.matmul(X.T, X) / N
+
+        if U is None or S is None:
+            U, S, V = np.linalg.svd(cov)
+
+        if type(dims) is float and dims <= 1.0:
+            cumulative_ratio = (np.cumsum(S)/np.sum(S)).tolist()
+            min_ratio = min([i for i in cumulative_ratio if i > dims])
+            dims = cumulative_ratio.index(min_ratio)
+            print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
+                  (dims+1, (min_ratio)*100.0))
+            dims += 1
+        elif type(dims) is int and dims >= 1:
+            print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
+                  (dims, ((np.cumsum(S)/np.sum(S))[dims-1])*100.0))
+
+
+        # Project data on to orthogonal subspace
+        X_reduced = np.matmul(X, U[:, :dims])
+
+        if whiten:
+            X_reduced = X_reduced / np.sqrt(S[:dims] + 1e-4)
+
+        return mean, U, S, dims, X_reduced
 
 
     def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None,
@@ -266,7 +300,7 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, normalize=True, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
               plot=True, log_freq=1000):
         start_time = time.time()
 
@@ -275,10 +309,18 @@ class Training(ABC):
             self.shuffle_split_data(X, y, shuffle=shuffle, y_onehot=y_onehot)
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
-        if normalize:
-            # Normalize data
-            mean, std, self._train_X = self.normalize_data(self._train_X)
-            _, _, self._test_X = self.normalize_data(self._test_X, mean, std)
+        if normalize is not None and any(str in normalize.lower() for str in ['mean', 'zero',
+                                                                              'center']):
+            # Mean Normalize data
+            mean, std, self._train_X = self.mean_normalize(self._train_X)
+            _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+        elif normalize is not None and 'pca' in normalize.lower():
+            # Project data on to principle componnts using SVD
+            mean, U, S, dims, self._train_X = self.reduce_data_dimensions(self._train_X, dims=dims)
+            _, _, _, _, self._test_X = \
+                self.reduce_data_dimensions(self._test_X, dims=dims, mean=mean, U=U, S=S,
+                                            N=self._train_X.shape[0])
+            self._nn.layers[0].reinitialize_weights(inputs=self._train_X)
 
         if plot:
             fig, axs = plt.subplots(2, sharey=False, sharex=True)

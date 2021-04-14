@@ -37,13 +37,14 @@ def main():
     plt.close(fig)
 
     weight_range = (-0.01, 0.01)
-    l1 = FC(X, num_neurons=1000, bias=True, weight_range=weight_range, activation_fn='ReLU')
+    l1 = FC(X, num_neurons=400, bias=True, weight_range=weight_range, activation_fn='ReLU')
     l2 = FC(l1, num_neurons=K, bias=True, weight_range=weight_range, activation_fn='SoftMax')
     layers = [l1, l2]
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-2, reg_lambda=1e-1, train_size=60000, test_size=10000)
-    train.train(X, y, normalize=True, shuffle=False, epochs=10000, plot=True, log_freq=1)
+    train.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot=True,
+                log_freq=1)
 
     input("Press Enter to continue...")
 

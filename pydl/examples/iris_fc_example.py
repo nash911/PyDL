@@ -38,7 +38,7 @@ def main():
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
-    train.train(X, y, normalize=True, epochs=50000, y_onehot=False, plot=True)
+    train.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
     l3_b = FC(l2, num_neurons=K, bias=True, weight_range=(-1, 1), activation_fn='Sigmoid')
@@ -46,7 +46,7 @@ def main():
 
     nn = NN(X, layers)
     train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
-    train.train(X, y, normalize=True, epochs=50000, y_onehot=False, plot=True)
+    train.train(X, y, normalize='mean', epochs=50000, y_onehot=False, plot=True)
 
     input("Press Enter to continue...")
 

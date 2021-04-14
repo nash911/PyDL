@@ -120,6 +120,7 @@ class FC(Layer):
         super().__init__(name=name)
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
+        self._weight_range = weight_range
         self._has_bias = True if type(bias) == np.ndarray else bias
         self._activation_fn = activations[activation_fn.lower()]()
 
@@ -139,6 +140,16 @@ class FC(Layer):
             self._bias = np.zeros(self._num_neurons, dtype=conf.dtype)
         else:
             self._bias = None
+
+
+    def reinitialize_weights(self, inputs=None, num_neurons=None):
+        num_feat = self._inp_size if inputs is None else inputs.shape[-1]
+        num_neurons = self._num_neurons if num_neurons is None else num_neurons
+        self._weights = np.random.uniform(self._weight_range[0], self._weight_range[1],
+                                          (num_feat, num_neurons))
+
+        if self._has_bias:
+            self._bias = np.zeros(num_neurons, dtype=conf.dtype)
 
 
     def score_fn(self, inputs, weights=None):
