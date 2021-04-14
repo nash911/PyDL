@@ -41,13 +41,13 @@ class TestLayers(unittest.TestCase):
         batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
-        uniform_range = [1, 2, 3, 10]
+        scale = [1e-6, 1e-3, 1e-1, 1e-0, 2, 3, 10]
 
-        for batch, feat, neur, rnge in list(itertools.product(batch_size, feature_size,
-                                                              num_neurons, uniform_range)):
-            X = np.random.uniform(-rnge, rnge, (batch, feat))
-            w = np.random.uniform(-rnge, rnge, (feat, neur))
-            bias = np.random.uniform(-rnge, rnge, (neur))
+        for batch, feat, neur, scl in list(itertools.product(batch_size, feature_size, num_neurons,
+                                                             scale)):
+            X = np.random.uniform(-scl, scl, (batch, feat))
+            w = np.random.randn(feat, neur) * scl
+            bias = np.zeros(neur)
             true_out = np.matmul(X, w)
             test(X, w, true_out)
             test(X, w, true_out+bias, bias)
@@ -78,13 +78,13 @@ class TestLayers(unittest.TestCase):
         batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
-        uniform_range = [1, 2]
+        scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
 
-        for batch, feat, neur, rnge in list(itertools.product(batch_size, feature_size,
-                                                              num_neurons, uniform_range)):
-            X = np.random.uniform(-rnge, rnge, (batch, feat))
-            w = np.random.uniform(-rnge, rnge, (feat, neur))
-            bias = np.random.uniform(-rnge, rnge, (neur))
+        for batch, feat, neur, scl in list(itertools.product(batch_size, feature_size, num_neurons,
+                                                             scale)):
+            X = np.random.uniform(-scl, scl, (batch, feat))
+            w = np.random.randn(feat, neur) * scl
+            bias = np.zeros(neur)
             score = np.matmul(X, w) + bias
 
             true_out_sig = 1.0 / (1.0 + np.exp(-np.matmul(X, w)))
@@ -197,15 +197,15 @@ class TestLayers(unittest.TestCase):
         batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
-        uniform_range = [1, 2]
-        unit_input_grad = [True, False]
+        scale = [1e-6, 1e-3, 1e-1, 1e-0, 2, 3, 10]
+        unit_inp_grad = [True, False]
 
-        for batch, feat, neur, rnge, unit in list(itertools.product(batch_size, feature_size,
-                                                                    num_neurons, uniform_range,
-                                                                    unit_input_grad)):
-            X = np.random.uniform(-rnge, rnge, (batch, feat))
-            w = np.random.uniform(-rnge, rnge, (feat, neur))
-            bias = np.random.uniform(-rnge, rnge, (neur))
+        for batch, feat, neur, scl, unit in list(itertools.product(batch_size, feature_size,
+                                                                   num_neurons, scale,
+                                                                   unit_inp_grad)):
+            X = np.random.uniform(-scl, scl, (batch, feat))
+            w = np.random.randn(feat, neur) * scl
+            bias = np.zeros(neur)
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
                        np.random.uniform(-10, 10, (batch, neur))
@@ -401,15 +401,15 @@ class TestLayers(unittest.TestCase):
         batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
-        uniform_range = [1, 2]
+        scale = [1e-3, 1e-1, 1e-0, 2]
         unit_inp_grad = [True, False]
 
-        for batch, feat, neur, rnge, unit in list(itertools.product(batch_size, feature_size,
-                                                                    num_neurons, uniform_range,
-                                                                    unit_inp_grad)):
-            X = np.random.uniform(-rnge, rnge, (batch, feat))
-            w = np.random.uniform(-rnge, rnge, (feat, neur))
-            bias = np.random.uniform(-rnge, rnge, (neur))
+        for batch, feat, neur, scl, unit in list(itertools.product(batch_size, feature_size,
+                                                                   num_neurons, scale,
+                                                                   unit_inp_grad)):
+            X = np.random.uniform(-scl, scl, (batch, feat))
+            w = np.random.randn(feat, neur) * scl
+            bias = np.zeros(neur)
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
                        np.random.uniform(-10, 10, (batch, neur))
@@ -429,31 +429,31 @@ class TestNN(unittest.TestCase):
         # NN Architecture
         # Layer 1 - Sigmoid
         X = np.random.uniform(-1, 1, (10, 25))
-        w_1 = np.random.uniform(-1, 1, (X.shape[-1], 19))
+        w_1 = np.random.randn(X.shape[-1], 19)
         b_1 = np.random.uniform(-1, 1, (1, 19))
         l1_score = np.matmul(X, w_1) + b_1
         l1_out = 1.0 / (1.0 + np.exp(-(l1_score)))
 
         # Layer 2
-        w_2 = np.random.uniform(-1, 1, (l1_out.shape[-1], 15))
+        w_2 = np.random.randn(l1_out.shape[-1], 15)
         b_2 = np.random.uniform(-1, 1, (1, 15))
         l2_score = np.matmul(l1_out, w_2) + b_2
         l2_out = np.maximum(0, l2_score)
 
         # Layer 3
-        w_3 = np.random.uniform(-1, 1, (l2_out.shape[-1], 11))
+        w_3 = np.random.randn(l2_out.shape[-1], 11)
         b_3 = np.random.uniform(-1, 1, (1, 11))
         l3_score = np.matmul(l2_out, w_3) + b_3
         l3_out = (2.0 / (1.0 + np.exp(-2.0*(l3_score)))) - 1.0
 
         # Layer 4
-        w_4 = np.random.uniform(-1, 1, (l3_out.shape[-1], 9))
+        w_4 = np.random.randn(l3_out.shape[-1], 9)
         b_4 = np.random.uniform(-1, 1, (1, 9))
         l4_score = np.matmul(l3_out, w_4) + b_4
         l4_out = np.maximum(0, l4_score)
 
         # Layer 4
-        w_5 = np.random.uniform(-1, 1, (l4_out.shape[-1], 9))
+        w_5 = np.random.randn(l4_out.shape[-1], 9)
         b_5 = np.random.uniform(-1, 1, (1, 9))
         l5_score = np.matmul(l4_out, w_5) + b_5
         l5_out = np.exp(l5_score) / np.sum(np.exp(l5_score), axis=-1, keepdims=True)
@@ -534,23 +534,23 @@ class TestNN(unittest.TestCase):
             # NN Architecture
             # Layer 1 - Sigmoid
             X = np.random.uniform(-1, 1, (10, 25))
-            w_1 = np.random.uniform(-1, 1, (X.shape[-1], 19))
+            w_1 = np.random.randn(X.shape[-1], 19)
             b_1 = np.random.uniform(-1, 1, (1, 19))
 
             # Layer 2
-            w_2 = np.random.uniform(-1, 1, (w_1.shape[-1], 15))
+            w_2 = np.random.randn(w_1.shape[-1], 15)
             b_2 = np.random.uniform(-1, 1, (1, 15))
 
             # Layer 3
-            w_3 = np.random.uniform(-1, 1, (w_2.shape[-1], 11))
+            w_3 = np.random.randn(w_2.shape[-1], 11)
             b_3 = np.random.uniform(-1, 1, (1, 11))
 
             # Layer 4
-            w_4 = np.random.uniform(-1, 1, (w_3.shape[-1], 9))
+            w_4 = np.random.randn(w_3.shape[-1], 9)
             b_4 = np.random.uniform(-1, 1, (1, 9))
 
             # Layer 5
-            w_5 = np.random.uniform(-1, 1, (w_4.shape[-1], 7))
+            w_5 = np.random.randn(w_4.shape[-1], 7)
             b_5 = np.random.uniform(-1, 1, (1, 7))
 
             l1 = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh')
