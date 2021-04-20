@@ -170,6 +170,9 @@ class TestTraining(unittest.TestCase):
                 w = layer.weights
                 weights_grad = layer.weights_grad
 
+                b = layer.bias
+                bias_grad = layer.bias_grad
+
                 # Weights finite difference gradients
                 weights_finite_diff = np.empty(weights_grad.shape)
                 for i in range(weights_grad.shape[0]):
@@ -181,9 +184,54 @@ class TestTraining(unittest.TestCase):
                         layer.weights = w - w_delta
                         rhs = train.loss(X, y)
                         weights_finite_diff[i,j] = (lhs - rhs) / (2 * self.delta)
-
-                npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=5)
                 layer.weights = w
+                npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=5)
+
+                # Bias finite difference gradients
+                bias_finite_diff = np.empty(bias_grad.shape)
+                for i in range(bias_grad.shape[0]):
+                    b_delta = np.zeros(b.shape, dtype=conf.dtype)
+                    b_delta[i] = self.delta
+                    layer.bias = b + b_delta
+                    lhs = train.loss(X, y)
+                    layer.bias = b - b_delta
+                    rhs = train.loss(X, y)
+                    bias_finite_diff[i] = (lhs - rhs) / (2 * self.delta)
+                layer.bias = b
+                npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=5)
+
+                if layer.has_batchnorm:
+                    bn = layer.batchnorm
+                    gamma = bn.gamma
+                    gamma_grad = bn.gamma_grad
+                    beta = bn.beta
+                    beta_grad = bn.beta_grad
+
+                    # Gamma finite difference gradients
+                    gamma_finite_diff = np.empty(gamma_grad.shape)
+                    for i in range(gamma_grad.shape[0]):
+                        g_delta = np.zeros(gamma.shape, dtype=conf.dtype)
+                        g_delta[i] = self.delta
+                        bn.gamma = gamma + g_delta
+                        lhs = train.loss(X, y)
+                        bn.gamma = gamma - g_delta
+                        rhs = train.loss(X, y)
+                        gamma_finite_diff[i] = (lhs - rhs) / (2 * self.delta)
+                    bn.gamma = gamma
+                    npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=5)
+
+                    # Beta finite difference gradients
+                    beta_finite_diff = np.empty(beta_grad.shape)
+                    for i in range(beta_grad.shape[0]):
+                        b_delta = np.zeros(beta.shape, dtype=conf.dtype)
+                        b_delta[i] = self.delta
+                        bn.beta = beta + b_delta
+                        lhs = train.loss(X, y)
+                        bn.beta = beta - b_delta
+                        rhs = train.loss(X, y)
+                        beta_finite_diff[i] = (lhs - rhs) / (2 * self.delta)
+                    bn.beta = beta
+                    npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=5)
 
             # Inputs finite difference gradients
             inputs_finite_diff = np.empty(inputs_grad.shape)
@@ -193,20 +241,19 @@ class TestTraining(unittest.TestCase):
                     i_delta[i,j] = self.delta
                     inputs_finite_diff[i,j] = ((train.loss(X + i_delta, y) -
                                                 train.loss(X - i_delta, y)) / (2 * self.delta))
-
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=5)
 
-        for _ in range(1):
-            # Manually calculated
+        batchnorm = [True, False]
+        for bn in batchnorm:
             # NN Architecture
             X = np.random.uniform(-1, 1, (100, 25))
 
-            l1 = FC(X, num_neurons=19, activation_fn='Tanh')
-            l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid')
-            l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid')
-            l4 = FC(l3, num_neurons=9, activation_fn='Tanh')
-            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax') # SoftMax Probs
-            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid') # Sigmoid Probs
+            l1 = FC(X, num_neurons=19, activation_fn='Tanh', batchnorm=bn)
+            l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid', batchnorm=bn)
+            l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid', batchnorm=bn)
+            l4 = FC(l3, num_neurons=9, activation_fn='Tanh', batchnorm=bn)
+            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=bn) # SoftMax Probs
+            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=bn) # Sigmoid Probs
 
             # SoftMax Probs
             layers = [l1, l2, l3, l4, l5_a]

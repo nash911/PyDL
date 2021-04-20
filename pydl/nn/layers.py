@@ -14,6 +14,7 @@ from pydl.nn.activations import Sigmoid
 from pydl.nn.activations import Tanh
 from pydl.nn.activations import SoftMax
 from pydl.nn.activations import ReLU
+from pydl.nn.batchnorm import BatchNorm
 from pydl import conf
 
 activations = {'sigmoid' : Sigmoid,
@@ -73,6 +74,14 @@ class Layer(ABC):
         return self._activation_fn.type
 
     @property
+    def has_batchnorm(self):
+        return False if self._batchnorm is None else True
+
+    @property
+    def batchnorm(self):
+        return self._batchnorm
+
+    @property
     def output(self):
         return self._output
 
@@ -116,7 +125,7 @@ class FC(Layer):
     """
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_scale=1.0,
-                 xavier=True, activation_fn='Sigmoid', name=None):
+                 xavier=True, activation_fn='Sigmoid', batchnorm=False, name=None):
         super().__init__(name=name)
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
@@ -148,6 +157,11 @@ class FC(Layer):
         else:
             self._bias = None
 
+        if batchnorm:
+            self._batchnorm = BatchNorm(feature_size=self._num_neurons)
+        else:
+            self._batchnorm = None
+
 
     def reinitialize_weights(self, inputs=None, num_neurons=None):
         num_feat = self._inp_size if inputs is None else inputs.shape[-1]
@@ -169,6 +183,9 @@ class FC(Layer):
 
         if self._has_bias:
             self._bias = np.zeros(num_neurons, dtype=conf.dtype)
+
+        if self._batchnorm is not None:
+            self._batchnorm.reinitialize_params(feature_size=num_neurons)
 
 
     def score_fn(self, inputs, weights=None):
@@ -216,21 +233,32 @@ class FC(Layer):
 
     def forward(self, inputs):
         self._inputs = inputs
-        self._output = self._activation_fn.forward(self.score_fn(inputs))
+        z = self.score_fn(inputs)
+        if self._batchnorm is not None:
+            z = self._batchnorm.forward(z)
+        self._output = self._activation_fn.forward(z)
         return self._output
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
         # dy/dz: Gradient of the output of the layer w.r.t the logits 'z'
         activation_grad = self._activation_fn.backward(inp_grad)
 
-        self._weights_grad = self.weight_gradients(activation_grad, reg_lambda, inputs)
-        if self._has_bias:
-            self._bias_grad = self.bias_gradients(activation_grad)
+        if self._batchnorm is not None:
+            intra_grad = self._batchnorm.backward(activation_grad)
+        else:
+            intra_grad = activation_grad
 
-        self._out_grad = self.input_gradients(activation_grad)
+        self._weights_grad = self.weight_gradients(intra_grad, reg_lambda, inputs)
+        if self._has_bias:
+            self._bias_grad = self.bias_gradients(intra_grad)
+
+        self._out_grad = self.input_gradients(intra_grad)
         return self._out_grad
 
     def update_weights(self, alpha):
+        if self._batchnorm is not None:
+            self._batchnorm.update_params(alpha)
+
         self.weights += self._weights_grad * alpha
         if self._has_bias:
             self.bias += self._bias_grad * alpha
