@@ -76,6 +76,11 @@ class BatchNorm(object):
     def forward(self, X):
         self._std_eps = np.sqrt(np.var(X, axis=0) + 1e-32)
         self._X_norm = (X - np.mean(X, axis=0)) / self._std_eps
+
+        #              (X - μ)
+        # BNᵧ,ᵦ(X) = ɣ --------- + 𝛃
+        #             √(σ² + Ɛ)
+
         bn = (self._X_norm * self._gamma) + self._beta
         return bn
 
@@ -87,8 +92,21 @@ class BatchNorm(object):
             else:
                 _ = self.forward(inputs)
 
+        # ∂BNᵧ,ᵦ(X)   m   ∂σ(z)
+        # -------- = ∑  -------- x̂ᵢ
+        #   ∂ɣ      i=1  ∂BN(xᵢ)
         self._gamma_grad = np.sum(self._X_norm * inp_grad, axis=0)
+
+        # ∂BNᵧ,ᵦ(X)   m   ∂σ(z)
+        # -------- = ∑  --------
+        #   ∂𝛃      i=1  ∂BN(xᵢ)
         self._beta_grad = np.sum(inp_grad, axis=0)
+
+        #               ∂BN    m  ∂BN           ∂BN
+        #            m ----- - ∑ ----- - x̂ᵢ∑  ----- . x̂ⱼ
+        # ∂BNᵧ,ᵦ(X)     ∂x̂ᵢ  j=1 ∂x̂ⱼ      j=1 ∂x̂ⱼ
+        # -------- = -------------------------------------
+        #   ∂xᵢ                   m √(σ² + Ɛ)
 
         M = inp_grad.shape[0]
         x_norm_grad = self._gamma * inp_grad
