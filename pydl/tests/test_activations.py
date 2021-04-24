@@ -41,8 +41,8 @@ class TestSigmoid(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         uniform_range = [0.001, 0.01, 0.1, 1, 10]
 
         for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
@@ -66,8 +66,8 @@ class TestSigmoid(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         inp_range = [0.001, 0.01, 0.1, 1, 10]
         grad_range = [0.001, 0.01, 0.1, 1, 10]
         unit_inp_grad = [True, False]
@@ -103,8 +103,8 @@ class TestTanh(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         uniform_range = [0.001, 0.01, 0.1, 1, 10]
 
         for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
@@ -128,8 +128,8 @@ class TestTanh(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         inp_range = [0.001, 0.01, 0.1, 1, 10]
         grad_range = [0.001, 0.01, 0.1, 1, 10]
         unit_inp_grad = [True, False]
@@ -161,9 +161,9 @@ class TestSoftMax(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
-        uniform_range = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11, 100]
+        uniform_range = [0.001, 0.01, 0.1, 1, 3]
 
         for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
             X = np.random.uniform(-rnge, rnge, (batch, feat))
@@ -192,8 +192,8 @@ class TestSoftMax(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 25]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11, 100]
         inp_range = [0.001, 0.01, 0.1, 1, 10]
         grad_range = [0.001, 0.01, 0.1, 1, 10]
         unit_inp_grad = [True, False]
@@ -204,11 +204,6 @@ class TestSoftMax(unittest.TestCase):
             inp_grad = np.ones((batch, feat), dtype=conf.dtype) if unit else \
                        np.random.uniform(-g_rnge, g_rnge, (batch, feat))
             test(X, inp_grad)
-
-        # # Random generated inputs - Large feature count
-        # X = np.random.uniform(-1, 1, (256, 10))
-        # inp_grad = np.random.uniform(-10, 10, (256, 10))
-        # test(X, inp_grad)
 
 
 class TestReLU(unittest.TestCase):
@@ -228,8 +223,8 @@ class TestReLU(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         uniform_range = [0.001, 0.01, 0.1, 1, 10]
 
         for batch, feat, rnge in list(itertools.product(batch_size, feature_size, uniform_range)):
@@ -266,8 +261,8 @@ class TestReLU(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 256]
-        feature_size = [1, 2, 3, 6, 11, 10000]
+        batch_size = [1, 2, 3, 6, 11]
+        feature_size = [1, 2, 3, 6, 11]
         inp_range = [0.001, 0.01, 0.1, 1, 10]
         grad_range = [0.001, 0.01, 0.1, 1, 10]
         unit_inp_grad = [True, False]

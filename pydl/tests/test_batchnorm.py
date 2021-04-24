@@ -32,8 +32,8 @@ class TestBatchNorm(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [2, 3, 6, 16, 64, 256, 512, 1024, 4096]
-        feature_size = [1, 2, 3, 6, 11, 25, 100, 1000, 3000]
+        batch_size = [2, 3, 6, 16, 64, 256]
+        feature_size = [1, 2, 3, 6, 11]
         scale = [1e-8, 1e-6, 1e-3, 1e-1, 1e-0, 2, 1e+1, 1e+2, 1e+3, 1e+4, 1e+6, 1e+8, 1e+16, 1e+32]
 
         for batch, feat, scl in list(itertools.product(batch_size, feature_size, scale)):
@@ -100,8 +100,8 @@ class TestBatchNorm(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [16, 64, 256, 512]
-        feature_size = [1, 2, 3, 6, 11, 25, 100]
+        batch_size = [16, 64, 256]
+        feature_size = [1, 2, 3, 6, 11]
         inp_scale = [1e-3, 1e-2, 1e-1, 1e-0, 2, 1e+1, 1e+2, 1e+3]
         unit_inp_grad = [True, False]
 
