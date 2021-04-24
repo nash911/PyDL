@@ -75,7 +75,7 @@ class TestLayers(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 3, 6, 11, 64, 256]
+        batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
@@ -146,10 +146,11 @@ class TestLayers(unittest.TestCase):
 
 
     def test_gradients_finite_difference(self):
-        self.delta = 1e-2
+        self.delta = 1e-5
         def test(inp, w, inp_grad, bias=False):
             fc = FC(inp, w.shape[-1], w, bias)
             weights_grad = fc.weight_gradients(inp_grad, inputs=X)
+            bias_grad = fc.bias_gradients(inp_grad)
             inputs_grad = fc.input_gradients(inp_grad)
 
             # Weights finite difference gradients
@@ -161,6 +162,14 @@ class TestLayers(unittest.TestCase):
                                                   fc.score_fn(inp, w - w_delta)) /
                                                   (2 * self.delta)) * inp_grad, axis=0)
 
+            # Bias finite difference gradients
+            fc.bias = bias + self.delta
+            lhs = fc.score_fn(inp)
+            fc.bias = bias - self.delta
+            rhs = fc.score_fn(inp)
+            bias_finite_diff = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad, axis=0)
+            fc.bias = bias
+
             # Inputs finite difference gradients
             inputs_finite_diff = np.empty(inputs_grad.shape)
             for i in range(inputs_grad.shape[1]):
@@ -171,8 +180,27 @@ class TestLayers(unittest.TestCase):
                                                    (2 * self.delta)) * inp_grad, axis=-1,
                                                  keepdims=False)
 
-            npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
-            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
+            # Threshold Gradient Diff Check
+            npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=5)
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=5)
+            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=5)
+
+            # # Relative gradient error check
+            # max_abs_w_grads = np.maximum(np.abs(weights_grad), np.abs(weights_finite_diff))
+            # max_abs_w_grads[max_abs_w_grads==0] = 1
+            # w_grads_accuracy = np.abs(weights_grad - weights_finite_diff) / max_abs_w_grads
+            # npt.assert_almost_equal(np.zeros_like(w_grads_accuracy), w_grads_accuracy, decimal=5)
+            #
+            # max_abs_b_grads = np.maximum(np.abs(bias_grad), np.abs(bias_finite_diff))
+            # max_abs_b_grads[max_abs_b_grads==0] = 1
+            # b_grads_accuracy = np.abs(bias_grad - bias_finite_diff) / max_abs_b_grads
+            # npt.assert_almost_equal(np.zeros_like(b_grads_accuracy), b_grads_accuracy, decimal=5)
+            #
+            # max_abs_inp_grads = np.maximum(np.abs(inputs_grad), np.abs(inputs_finite_diff))
+            # max_abs_inp_grads[max_abs_inp_grads==0] = 1
+            # inp_grads_accuracy = np.abs(inputs_grad - inputs_finite_diff) / max_abs_inp_grads
+            # npt.assert_almost_equal(np.zeros_like(inp_grads_accuracy), inp_grads_accuracy, decimal=5)
+
 
         # Manually calculated - Unit input gradients
         X = np.array([[1, 2, 3],
@@ -192,7 +220,7 @@ class TestLayers(unittest.TestCase):
                       [9, 10, 11, 12]], dtype=conf.dtype)
         bias = np.array([0.1, 0.2, 0.3, 0.4], dtype=conf.dtype)
         inp_grad = np.array([[1, 2, 3, 4],
-                             [-1, -2, -3, -4]], dtype=conf.dtype)
+                             [-5, -6, -7, -8]], dtype=conf.dtype)
         test(X, w, inp_grad, bias)
 
         # Combinatorial Test Cases
@@ -200,7 +228,7 @@ class TestLayers(unittest.TestCase):
         batch_size = [1, 2, 3, 6, 11]
         feature_size = [1, 2, 3, 6, 11]
         num_neurons = [1, 2, 3, 6, 11]
-        scale = [1e-6, 1e-3, 1e-1, 1e-0, 2, 3, 10]
+        scale = [1e-4, 1e-3, 1e-1, 1e-0, 2, 3, 10]
         unit_inp_grad = [True, False]
 
         for batch, feat, neur, scl, unit in list(itertools.product(batch_size, feature_size,
@@ -208,7 +236,7 @@ class TestLayers(unittest.TestCase):
                                                                    unit_inp_grad)):
             X = np.random.uniform(-scl, scl, (batch, feat))
             w = np.random.randn(feat, neur) * scl
-            bias = np.zeros(neur)
+            bias = np.random.rand(neur) * scl
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
                        np.random.uniform(-10, 10, (batch, neur))
@@ -222,6 +250,7 @@ class TestLayers(unittest.TestCase):
             y = fc.forward(inp)
             inputs_grad = fc.backward(inp_grad)
             weights_grad = fc.weights_grad
+            bias_grad = fc.bias_grad
 
             # Weights finite difference gradients
             weights_finite_diff = np.empty(weights_grad.shape)
@@ -235,6 +264,18 @@ class TestLayers(unittest.TestCase):
                     rhs = fc.forward(inp)
                     weights_finite_diff[i,j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
             fc.weights = w
+
+            # Bias finite difference gradients
+            bias_finite_diff = np.empty(bias_grad.shape)
+            for i in range(bias_grad.shape[0]):
+                bias_delta = np.zeros(bias.shape, dtype=conf.dtype)
+                bias_delta[i] = self.delta
+                fc.bias = bias + bias_delta
+                lhs = fc.forward(inp)
+                fc.bias = bias - bias_delta
+                rhs = fc.forward(inp)
+                bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
+            fc.bias = bias
 
             # Inputs finite difference gradients
             inputs_finite_diff = np.empty(inputs_grad.shape)
@@ -278,7 +319,7 @@ class TestLayers(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        batch_size = [1, 2, 8, 37, 64, 256]
+        batch_size = [1, 2, 8, 11]
         feature_size = [1, 2, 3, 11]
         num_neurons = [1, 2, 3, 11]
         scale = [1e-3, 1e-0, 2]

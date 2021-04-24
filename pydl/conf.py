@@ -9,5 +9,5 @@
 
 import numpy as np
 
-dtype = np.float32
+dtype = np.float64
 """Default dtype used by PyDL."""
