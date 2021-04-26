@@ -281,6 +281,7 @@ class Training(ABC):
             self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
                                      test_accuracy)
 
+
     def learning_curve_plot(self, fig, axs, train_loss, test_loss, train_accuracy, test_accuracy):
         x_values = list(range(len(train_loss)))
 
@@ -300,14 +301,11 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
-              y_onehot=False, plot=True, log_freq=1000):
-        start_time = time.time()
-
+    def prepare_data(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256,
+                     y_onehot=False):
         # Shuffle and split data into train and test sets
         self._train_X, self._train_y, self._test_X, self._test_y = \
             self.shuffle_split_data(X, y, shuffle=shuffle, y_onehot=y_onehot)
-        num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
         if normalize is not None and any(str in normalize.lower() for str in ['mean', 'zero',
                                                                               'center']):
@@ -322,8 +320,13 @@ class Training(ABC):
                                             N=self._train_X.shape[0])
             self._nn.layers[0].reinitialize_weights(inputs=self._train_X)
 
-        if plot:
+
+    def train(self, batch_size=256, epochs=100, plot=None, log_freq=1000):
+        start_time = time.time()
+
+        if plot is not None:
             fig, axs = plt.subplots(2, sharey=False, sharex=True)
+            fig.suptitle(plot, fontsize=20)
         else:
             fig = axs = None
 
@@ -331,6 +334,7 @@ class Training(ABC):
         test_loss = list()
         train_accuracy = list()
         test_accuracy = list()
+        num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
         init_train_l = self.loss(self._train_X, self._train_y)
         self.print_log(0, plot, fig, axs, init_train_l, train_loss, test_loss, train_accuracy,
@@ -363,8 +367,49 @@ class SGD(Training):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, name=name)
 
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
+              y_onehot=False, plot=None, log_freq=1000):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+
+        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+
+
     def update_network(self):
         for l in self._nn.layers:
             l.weights += -self._step_size * l.weights_grad
             if l.bias is not None:
                 l.bias += -self._step_size * l.bias_grad
+
+
+class Momentum(Training):
+    def __init__(self, nn=None, mu=0.5, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+                 activatin_type=None, name=None):
+        super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
+                         test_size=test_size, activatin_type=activatin_type, name=name)
+        self._mu = mu
+        self._vel = list()
+
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
+              y_onehot=False, plot=None, log_freq=1000):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+
+        # Initialize momentum velocities to zero
+        for l in self._nn.layers:
+            v = {'w': np.zeros_like(l.weights),
+                 'b': np.zeros_like(l.bias)}
+            self._vel.append(v)
+
+        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+
+
+    def update_network(self):
+        for l, v in zip(self._nn.layers, self._vel):
+            v['w'] = (v['w'] * self._mu) - (self._step_size * l.weights_grad)
+            v['b'] = (v['b'] * self._mu) - (self._step_size * l.bias_grad)
+
+            l.weights += v['w']
+            l.bias += v['b']

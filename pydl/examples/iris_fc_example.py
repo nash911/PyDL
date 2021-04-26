@@ -13,6 +13,7 @@ from sklearn import datasets
 from pydl.nn.layers import FC
 from pydl.nn.layers import NN
 from pydl.training.training import SGD
+from pydl.training.training import Momentum
 from pydl import conf
 
 def main():
@@ -37,10 +38,17 @@ def main():
             activation_fn='Tanh')
     l3_a = FC(l2, num_neurons=K, bias=True, weight_scale=1.0, xavier=False, activation_fn='SoftMax')
     layers = [l1, l2, l3_a]
+    nn_a = NN(X, layers)
 
-    nn = NN(X, layers)
-    sgd = SGD(nn, step_size=1e-3, reg_lambda=1e-2)
-    sgd.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot=True)
+    # SGD
+    sgd = SGD(nn_a, step_size=1e-3, reg_lambda=1e-2)
+    sgd.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot='SGD - PCA')
+
+    # Momentum
+    nn_a.reinitialize_network()
+    momentum = Momentum(nn_a, mu=0.5, step_size=1e-3, reg_lambda=1e-2)
+    momentum.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False,
+                   plot='Momentum - PCA')
 
     # Sigmoid Cross Entropy
     l1 = FC(X, num_neurons=int(X.shape[-1]*2), bias=True, weight_scale=1.0, xavier=True,
@@ -49,10 +57,17 @@ def main():
             activation_fn='Tanh')
     l3_b = FC(l2, num_neurons=K, bias=True, weight_scale=1.0, xavier=True, activation_fn='Sigmoid')
     layers = [l1, l2, l3_b]
+    nn_b = NN(X, layers)
 
-    nn = NN(X, layers)
-    sgd = SGD(nn, step_size=1e-3, reg_lambda=1e-2)
-    sgd.train(X, y, normalize='mean', epochs=50000, y_onehot=False, plot=True)
+    # SGD
+    sgd = SGD(nn_b, step_size=1e-3, reg_lambda=1e-2)
+    sgd.train(X, y, normalize='mean', epochs=50000, y_onehot=False, plot='SGD - Mean Normalized')
+
+    # Momentum
+    nn_b.reinitialize_network()
+    momentum = Momentum(nn_b, mu=0.5, step_size=1e-3, reg_lambda=1e-2)
+    momentum.train(X, y, normalize='mean', epochs=50000, y_onehot=False,
+                   plot='Momentum - Mean Normalized')
 
     input("Press Enter to continue...")
 

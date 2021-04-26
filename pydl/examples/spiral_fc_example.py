@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from pydl.nn.layers import FC
 from pydl.nn.layers import NN
 from pydl.training.training import SGD
+from pydl.training.training import Momentum
 from pydl import conf
 
 def main():
@@ -44,24 +45,24 @@ def main():
     plt.waitforbuttonpress(0)
     plt.close(fig)
 
+    # SoftMax Cross Entropy - SGD
+    l1_a = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
+    l2_a = FC(l1_a, num_neurons=K, bias=True, activation_fn='SoftMax')
+    layers = [l1_a, l2_a]
 
-    # SoftMax Cross Entropy
-    l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
-    l2 = FC(l1, num_neurons=K, bias=True, activation_fn='SoftMax')
-    layers = [l1, l2]
+    nn_a = NN(X, layers)
+    sgd = SGD(nn_a, step_size=1e-2, reg_lambda=1e-3)
+    sgd.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False,
+              plot='SGD - Softmax')
 
-    nn = NN(X, layers)
-    sgd = SGD(nn, step_size=1e-2, reg_lambda=1e-3)
-    sgd.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False, plot=True)
+    # Sigmoid Cross Entropy - Momentum
+    l1_b = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
+    l2_b = FC(l1_b, num_neurons=K, bias=True, activation_fn='Sigmoid')
+    layers = [l1_b, l2_b]
 
-    # Sigmoid Cross Entropy
-    l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
-    l2 = FC(l1, num_neurons=K, bias=True, activation_fn='Sigmoid')
-    layers = [l1, l2]
-
-    nn = NN(X, layers)
-    sgd = SGD(nn, step_size=1e-2, reg_lambda=1e-3)
-    sgd.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot=True)
+    nn_b = NN(X, layers)
+    momentum = Momentum(nn_b, step_size=1e-2, reg_lambda=1e-3)
+    momentum.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot='Momentum - Sigmoid')
 
     input("Press Enter to continue...")
 
