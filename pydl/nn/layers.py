@@ -290,6 +290,11 @@ class NN:
         return self._layers
 
 
+    def reinitialize_network(self):
+        for l in self._layers:
+            l.reinitialize_weights()
+
+
     def forward(self, inputs):
         layer_inp = inputs
         for l in self._layers:
