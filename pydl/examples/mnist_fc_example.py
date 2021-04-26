@@ -45,7 +45,7 @@ def main():
 
     nn = NN(X, layers)
     sgd = SGD(nn, step_size=1e-2, reg_lambda=1e-1, train_size=60000, test_size=10000)
-    sgd.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot=True,
+    sgd.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot='MNIST - SGD',
               log_freq=1)
 
     input("Press Enter to continue...")
