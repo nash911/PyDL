@@ -12,7 +12,7 @@ from sklearn import datasets
 
 from pydl.nn.layers import FC
 from pydl.nn.layers import NN
-from pydl.training.training import Training
+from pydl.training.training import SGD
 from pydl import conf
 
 def main():
@@ -39,8 +39,8 @@ def main():
     layers = [l1, l2, l3_a]
 
     nn = NN(X, layers)
-    train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
-    train.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot=True)
+    sgd = SGD(nn, step_size=1e-3, reg_lambda=1e-2)
+    sgd.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
     l1 = FC(X, num_neurons=int(X.shape[-1]*2), bias=True, weight_scale=1.0, xavier=True,
@@ -51,8 +51,8 @@ def main():
     layers = [l1, l2, l3_b]
 
     nn = NN(X, layers)
-    train = Training(nn, step_size=1e-3, reg_lambda=1e-2)
-    train.train(X, y, normalize='mean', epochs=50000, y_onehot=False, plot=True)
+    sgd = SGD(nn, step_size=1e-3, reg_lambda=1e-2)
+    sgd.train(X, y, normalize='mean', epochs=50000, y_onehot=False, plot=True)
 
     input("Press Enter to continue...")
 

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.layers import NN
-from pydl.training.training import Training
+from pydl.training.training import SGD
 from pydl import conf
 
 def main():
@@ -51,8 +51,8 @@ def main():
     layers = [l1, l2]
 
     nn = NN(X, layers)
-    train = Training(nn, step_size=1e-2, reg_lambda=1e-3)
-    train.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False, plot=True)
+    sgd = SGD(nn, step_size=1e-2, reg_lambda=1e-3)
+    sgd.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False, plot=True)
 
     # Sigmoid Cross Entropy
     l1 = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
@@ -60,8 +60,8 @@ def main():
     layers = [l1, l2]
 
     nn = NN(X, layers)
-    train = Training(nn, step_size=1e-2, reg_lambda=1e-3)
-    train.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot=True)
+    sgd = SGD(nn, step_size=1e-2, reg_lambda=1e-3)
+    sgd.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot=True)
 
     input("Press Enter to continue...")
 

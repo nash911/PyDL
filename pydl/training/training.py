@@ -300,8 +300,8 @@ class Training(ABC):
         plt.pause(0.01)
 
 
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100, y_onehot=False,
-              plot=True, log_freq=1000):
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
+              y_onehot=False, plot=True, log_freq=1000):
         start_time = time.time()
 
         # Shuffle and split data into train and test sets
@@ -347,11 +347,7 @@ class Training(ABC):
                 train_l = self.loss(self._train_X[start:end], self._train_y[start:end])
                 loss_grad = self.loss_gradient(self._train_X[start:end], self._train_y[start:end])
                 _ = self._nn.backward(loss_grad, self._lambda)
-
-                for l in self._nn.layers:
-                    l.weights += -self._step_size * l.weights_grad
-                    if l.bias is not None:
-                        l.bias += -self._step_size * l.bias_grad
+                self.update_network()
 
             if (e+1) % log_freq == 0:
                 self.print_log(e+1, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
@@ -362,5 +358,13 @@ class Training(ABC):
 
 
 class SGD(Training):
-    def __init__(self, nn=None, name=None):
-        super().__init__(nn=nn, name=name)
+    def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+                 activatin_type=None, name=None):
+        super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
+                         test_size=test_size, activatin_type=activatin_type, name=name)
+
+    def update_network(self):
+        for l in self._nn.layers:
+            l.weights += -self._step_size * l.weights_grad
+            if l.bias is not None:
+                l.bias += -self._step_size * l.bias_grad
