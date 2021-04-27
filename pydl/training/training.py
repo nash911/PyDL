@@ -413,3 +413,35 @@ class Momentum(Training):
 
             l.weights += v['w']
             l.bias += v['b']
+
+
+class RMSprop(Training):
+    def __init__(self, nn=None, beta=0.9, step_size=1e-2, reg_lambda=1e-4, train_size=70,
+                 test_size=30, activatin_type=None, name=None):
+        super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
+                         test_size=test_size, activatin_type=activatin_type, name=name)
+        self._beta = beta
+        self._cache = list()
+
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
+              y_onehot=False, plot=None, log_freq=1000):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+
+        # Initialize cache to zero
+        for l in self._nn.layers:
+            c = {'w': np.zeros_like(l.weights),
+                 'b': np.zeros_like(l.bias)}
+            self._cache.append(c)
+
+        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+
+
+    def update_network(self):
+        for l, c in zip(self._nn.layers, self._cache):
+            c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (l.weights_grad**2))
+            c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (l.bias_grad**2))
+
+            l.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * l.weights_grad
+            l.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * l.bias_grad

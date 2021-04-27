@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.layers import NN
-from pydl.training.training import Momentum
+from pydl.training.training import RMSprop
 from pydl import conf
 
 def main():
@@ -36,7 +36,7 @@ def main():
     plt.waitforbuttonpress(0)
     plt.close(fig)
 
-    weight_scale = 0.01
+    weight_scale = 1.0
 
     l1 = FC(X, num_neurons=200, bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='Tanh', batchnorm=True)
@@ -53,10 +53,9 @@ def main():
     layers = [l1, l2, l3, l4, l5, l6]
 
     nn = NN(X, layers)
-    momentum = Momentum(nn, mu=0.5, step_size=1e-2, reg_lambda=1e-1, train_size=60000,
-                        test_size=10000)
-    momentum.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, log_freq=1,
-                   plot='MNIST - Momentum')
+    rms = RMSprop(nn, beta=0.999, step_size=1e-4, reg_lambda=1e-1, train_size=60000, test_size=10000)
+    rms.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot='MNIST - RMSprop',
+              log_freq=1)
 
     input("Press Enter to continue...")
 

@@ -14,6 +14,7 @@ from pydl.nn.layers import FC
 from pydl.nn.layers import NN
 from pydl.training.training import SGD
 from pydl.training.training import Momentum
+from pydl.training.training import RMSprop
 from pydl import conf
 
 def main():
@@ -48,21 +49,30 @@ def main():
     # SoftMax Cross Entropy - SGD
     l1_a = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
     l2_a = FC(l1_a, num_neurons=K, bias=True, activation_fn='SoftMax')
-    layers = [l1_a, l2_a]
+    layers_a = [l1_a, l2_a]
 
-    nn_a = NN(X, layers)
+    nn_a = NN(X, layers_a)
     sgd = SGD(nn_a, step_size=1e-2, reg_lambda=1e-3)
-    sgd.train(X, y, normalize='mean', batch_size=256, epochs=50000, y_onehot=False,
+    sgd.train(X, y, normalize='mean', batch_size=256, epochs=20000, y_onehot=False,
               plot='SGD - Softmax')
 
     # Sigmoid Cross Entropy - Momentum
     l1_b = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
     l2_b = FC(l1_b, num_neurons=K, bias=True, activation_fn='Sigmoid')
-    layers = [l1_b, l2_b]
+    layers_b = [l1_b, l2_b]
 
-    nn_b = NN(X, layers)
-    momentum = Momentum(nn_b, step_size=1e-2, reg_lambda=1e-3)
-    momentum.train(X, y, batch_size=256, epochs=50000, y_onehot=False, plot='Momentum - Sigmoid')
+    nn_b = NN(X, layers_b)
+    momentum = Momentum(nn_b, mu=0.5, step_size=1e-2, reg_lambda=1e-3)
+    momentum.train(X, y, batch_size=256, epochs=20000, y_onehot=False, plot='Momentum - Sigmoid')
+
+    # Sigmoid Cross Entropy - RMSprop
+    l1_c = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
+    l2_c = FC(l1_c, num_neurons=K, bias=True, activation_fn='Sigmoid')
+    layers_c = [l1_c, l2_c]
+
+    nn_c = NN(X, layers_c)
+    rms = RMSprop(nn_c, beta=0.9, step_size=1e-2, reg_lambda=1e-3)
+    rms.train(X, y, batch_size=256, epochs=20000, y_onehot=False, plot='RMSprop - Sigmoid')
 
     input("Press Enter to continue...")
 
