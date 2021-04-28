@@ -53,7 +53,7 @@ def main():
     layers = [l1, l2, l3, l4, l5, l6]
 
     nn = NN(X, layers)
-    momentum = Momentum(nn, mu=0.5, step_size=1e-2, reg_lambda=1e-1, train_size=60000,
+    momentum = Momentum(nn, step_size=1e-2, mu=0.5, reg_lambda=1e-1, train_size=60000,
                         test_size=10000)
     momentum.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, log_freq=1,
                    plot='MNIST - Momentum')

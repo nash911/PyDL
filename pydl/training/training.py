@@ -351,7 +351,7 @@ class Training(ABC):
                 train_l = self.loss(self._train_X[start:end], self._train_y[start:end])
                 loss_grad = self.loss_gradient(self._train_X[start:end], self._train_y[start:end])
                 _ = self._nn.backward(loss_grad, self._lambda)
-                self.update_network()
+                self.update_network(e+1)
 
             if (e+1) % log_freq == 0:
                 self.print_log(e+1, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
@@ -376,7 +376,7 @@ class SGD(Training):
         super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
 
 
-    def update_network(self):
+    def update_network(self, t=None):
         for l in self._nn.layers:
             l.weights += -self._step_size * l.weights_grad
             if l.bias is not None:
@@ -384,7 +384,7 @@ class SGD(Training):
 
 
 class Momentum(Training):
-    def __init__(self, nn=None, mu=0.5, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+    def __init__(self, nn=None, step_size=1e-2, mu=0.5, reg_lambda=1e-4, train_size=70, test_size=30,
                  activatin_type=None, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, name=name)
@@ -406,7 +406,7 @@ class Momentum(Training):
         super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
 
 
-    def update_network(self):
+    def update_network(self, t=None):
         for l, v in zip(self._nn.layers, self._vel):
             v['w'] = (v['w'] * self._mu) - (self._step_size * l.weights_grad)
             v['b'] = (v['b'] * self._mu) - (self._step_size * l.bias_grad)
@@ -416,7 +416,7 @@ class Momentum(Training):
 
 
 class RMSprop(Training):
-    def __init__(self, nn=None, beta=0.9, step_size=1e-2, reg_lambda=1e-4, train_size=70,
+    def __init__(self, nn=None, step_size=1e-2, beta=0.999, reg_lambda=1e-4, train_size=70,
                  test_size=30, activatin_type=None, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, name=name)
@@ -438,10 +438,60 @@ class RMSprop(Training):
         super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
 
 
-    def update_network(self):
+    def update_network(self, t=None):
         for l, c in zip(self._nn.layers, self._cache):
             c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (l.weights_grad**2))
             c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (l.bias_grad**2))
 
             l.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * l.weights_grad
             l.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * l.bias_grad
+
+
+class Adam(Training):
+    def __init__(self, nn=None, step_size=1e-2, beta_1=0.9, beta_2=0.999, reg_lambda=1e-4,
+                 train_size=70, test_size=30, activatin_type=None, name=None):
+        super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
+                         test_size=test_size, activatin_type=activatin_type, name=name)
+        self._beta_1 = beta_1
+        self._beta_2 = beta_2
+        self._m = list()
+        self._v = list()
+
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
+              y_onehot=False, plot=None, log_freq=1000):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+
+        # Initialize cache to zero
+        for l in self._nn.layers:
+            m = {'w': np.zeros_like(l.weights),
+                 'b': np.zeros_like(l.bias)}
+            self._m.append(m)
+
+            v = {'w': np.zeros_like(l.weights),
+                 'b': np.zeros_like(l.bias)}
+            self._v.append(v)
+
+        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+
+
+    def update_network(self, t):
+        for l, m, v in zip(self._nn.layers, self._m, self._v):
+            # First order moment update
+            m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * l.weights_grad)
+            m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * l.bias_grad)
+
+            # Second order moment update
+            v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (l.weights_grad**2))
+            v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (l.bias_grad**2))
+
+            # Update Weights
+            m_hat_w = m['w'] / (1.0 - self._beta_1**t)
+            v_hat_w = v['w'] / (1.0 - self._beta_2**t)
+            l.weights += -(self._step_size * m_hat_w) / (np.sqrt(v_hat_w) + 1e-8)
+
+            # Update Bias
+            m_hat_b = m['b'] / (1.0 - self._beta_1**t)
+            v_hat_b = v['b'] / (1.0 - self._beta_2**t)
+            l.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
