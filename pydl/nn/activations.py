@@ -47,6 +47,21 @@ class Activation(ABC):
         pass
 
 
+class Linear(Activation):
+    """The Linear Activation Class
+    """
+
+    def __init__(self, name=None):
+        super().__init__(name=name, type='Linear')
+
+
+    def forward(self, inputs):
+        return inputs
+
+    def backward(self, inp_grad, inputs=None):
+        return inp_grad
+
+
 class Sigmoid(Activation):
     """The Sigmoid Class
     """

@@ -8,6 +8,7 @@
 # ------------------------------------------------------------------------
 
 import numpy as np
+import sys
 from pydl import conf
 
 
