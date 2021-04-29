@@ -132,27 +132,27 @@ class Training(ABC):
         return train_X, train_y, test_X, test_y
 
 
-    def loss(self, X, y, prob=None):
+    def loss(self, X, y, inference=False, prob=None):
         if 'softmax' in self._activatin_type.lower():
-            return self.softmax_cross_entropy_loss(X, y, prob)
+            return self.softmax_cross_entropy_loss(X, y, inference, prob)
         elif 'sigmoid' in self._activatin_type.lower():
-            return self.sigmoid_cross_entropy_loss(X, y, prob)
+            return self.sigmoid_cross_entropy_loss(X, y, inference, prob)
         else:
             sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
 
-    def loss_gradient(self, X, y, prob=None):
+    def loss_gradient(self, X, y, inference=False, prob=None):
         if 'softmax' in self._activatin_type.lower():
-            return self.softmax_cross_entropy_gradient(X, y, prob)
+            return self.softmax_cross_entropy_gradient(X, y, inference, prob)
         elif 'sigmoid' in self._activatin_type.lower():
-            return self.sigmoid_cross_entropy_gradient(X, y, prob)
+            return self.sigmoid_cross_entropy_gradient(X, y, inference, prob)
         else:
             sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
 
-    def softmax_cross_entropy_loss(self, X, y, prob=None):
+    def softmax_cross_entropy_loss(self, X, y, inference=False, prob=None):
         if prob is None:
-            self._class_prob = self._nn.forward(X)
+            self._class_prob = self._nn.forward(X, inference)
         else:
             # sum_probs = np.sum(prob, axis=-1, keepdims=True)
             # ones = np.ones_like(sum_probs)
@@ -178,13 +178,13 @@ class Training(ABC):
         return np.mean(neg_ln_prob[range(y.size), y]) + regularization_loss
 
 
-    def softmax_cross_entropy_gradient(self, X, y, prob=None):
+    def softmax_cross_entropy_gradient(self, X, y, inference=False, prob=None):
         if prob is not None:
             # sum_probs = np.sum(prob, axis=-1, keepdims=True)
             # ones = np.ones_like(sum_probs)
             self._class_prob = prob
         elif self._class_prob is None:
-            self._class_prob = self._nn.forward(X)
+            self._class_prob = self._nn.forward(X, inference)
 
         if len(y.shape) == 2: # y --> OneHot Representation
             # Convert y to class labels
@@ -197,9 +197,9 @@ class Training(ABC):
         return loss_grad
 
 
-    def sigmoid_cross_entropy_loss(self, X, y, prob=None):
+    def sigmoid_cross_entropy_loss(self, X, y, inference=False, prob=None):
         if prob is None:
-            self._class_prob = self._nn.forward(X)
+            self._class_prob = self._nn.forward(X, inference)
         else:
             self._class_prob = prob
 
@@ -233,11 +233,11 @@ class Training(ABC):
         return (np.sum(logistic_probs) / y.shape[0]) + regularization_loss
 
 
-    def sigmoid_cross_entropy_gradient(self, X, y, prob=None):
+    def sigmoid_cross_entropy_gradient(self, X, y, inference=False, prob=None):
         if prob is not None:
             self._class_prob = prob
         elif self._class_prob is None:
-            self._class_prob = self._nn.forward(X)
+            self._class_prob = self._nn.forward(X, inference)
 
         if len(y.shape) == 1: # y --> Class labels
             loss_grad = (1.0 / (1.0 - self._class_prob))
@@ -251,8 +251,8 @@ class Training(ABC):
         return loss_grad / y.shape[0]
 
 
-    def evaluate(self, X, y):
-        test_prob = self._nn.forward(X)
+    def evaluate(self, X, y, inference=True):
+        test_prob = self._nn.forward(X, inference)
         pred = np.argmax(test_prob, axis=-1)
 
         if len(y.shape) == 1: # y --> Class labels
@@ -267,9 +267,9 @@ class Training(ABC):
 
     def print_log(self, epoch, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
                   test_accuracy):
-        test_l = self.loss(self._test_X, self._test_y)
-        train_accur = self.evaluate(self._train_X, self._train_y)
-        test_accur = self.evaluate(self._test_X, self._test_y)
+        test_l = self.loss(self._test_X, self._test_y, inference=True)
+        train_accur = self.evaluate(self._train_X, self._train_y, inference=True)
+        test_accur = self.evaluate(self._test_X, self._test_y, inference=True)
         print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
               (epoch, train_l, test_l, train_accur, test_accur))
 
@@ -336,7 +336,7 @@ class Training(ABC):
         test_accuracy = list()
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
-        init_train_l = self.loss(self._train_X, self._train_y)
+        init_train_l = self.loss(self._train_X, self._train_y, inference=False)
         self.print_log(0, plot, fig, axs, init_train_l, train_loss, test_loss, train_accuracy,
                        test_accuracy)
 
@@ -348,7 +348,8 @@ class Training(ABC):
                 else:
                     end = start + batch_size
 
-                train_l = self.loss(self._train_X[start:end], self._train_y[start:end])
+                train_l = self.loss(self._train_X[start:end], self._train_y[start:end],
+                                    inference=False)
                 loss_grad = self.loss_gradient(self._train_X[start:end], self._train_y[start:end])
                 _ = self._nn.backward(loss_grad, self._lambda)
                 self.update_network(e+1)

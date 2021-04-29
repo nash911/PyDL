@@ -10,14 +10,17 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+from pydl.nn.activations import Linear
 from pydl.nn.activations import Sigmoid
 from pydl.nn.activations import Tanh
 from pydl.nn.activations import SoftMax
 from pydl.nn.activations import ReLU
 from pydl.nn.batchnorm import BatchNorm
+from pydl.nn.dropout import Dropout
 from pydl import conf
 
-activations = {'sigmoid' : Sigmoid,
+activations = {'linear' : Linear,
+               'sigmoid' : Sigmoid,
                'tanh' : Tanh,
                'softmax' : SoftMax,
                'relu' : ReLU
@@ -82,6 +85,10 @@ class Layer(ABC):
         return self._batchnorm
 
     @property
+    def dropout(self):
+        return self._dropout
+
+    @property
     def output(self):
         return self._output
 
@@ -112,7 +119,7 @@ class Layer(ABC):
     # Abstract Methods
     # ----------------
     @abstractmethod
-    def forward(self, inputs):
+    def forward(self, inputs, inference=False, mask=None):
         pass
 
     @abstractmethod
@@ -125,7 +132,7 @@ class FC(Layer):
     """
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_scale=1.0,
-                 xavier=True, activation_fn='Sigmoid', batchnorm=False, name=None):
+                 xavier=True, activation_fn='Sigmoid', batchnorm=False, dropout=None, name=None):
         super().__init__(name=name)
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
@@ -161,6 +168,11 @@ class FC(Layer):
             self._batchnorm = BatchNorm(feature_size=self._num_neurons)
         else:
             self._batchnorm = None
+
+        if dropout is not None:
+            self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
+        else:
+            self._dropout = None
 
 
     def reinitialize_weights(self, inputs=None, num_neurons=None):
@@ -231,28 +243,51 @@ class FC(Layer):
             grad = np.sum(grad, axis=-1, keepdims=False)
         return grad
 
-    def forward(self, inputs):
+    def forward(self, inputs, inference=False, mask=None):
         self._inputs = inputs
+
+        # Sum of weighted inputs
         z = self.score_fn(inputs)
+
+        # Batchnorm
         if self._batchnorm is not None:
             z = self._batchnorm.forward(z)
+
+        # Nonlinearity Activation
         self._output = self._activation_fn.forward(z)
+
+        # Dropout
+        if self._dropout is not None:
+            if not inference: # Training step
+                # Apply Dropout Mask
+                self._output = self._dropout.forward(self._output, mask)
+            else: # Inference
+                 if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
+                     self._output *= self.dropout.p
+                 else: # Activation Fn. ∈ {'Linear', 'ReLU'}
+                     pass # Do nothing - Inverse Dropout
+
         return self._output
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
+        if self._dropout is not None:
+            drop_grad = self._dropout.backward(inp_grad)
+        else:
+            drop_grad = inp_grad
+
         # dy/dz: Gradient of the output of the layer w.r.t the logits 'z'
-        activation_grad = self._activation_fn.backward(inp_grad)
+        activation_grad = self._activation_fn.backward(drop_grad)
 
         if self._batchnorm is not None:
-            intra_grad = self._batchnorm.backward(activation_grad)
+            batch_grad = self._batchnorm.backward(activation_grad)
         else:
-            intra_grad = activation_grad
+            batch_grad = activation_grad
 
-        self._weights_grad = self.weight_gradients(intra_grad, reg_lambda, inputs)
+        self._weights_grad = self.weight_gradients(batch_grad, reg_lambda, inputs)
         if self._has_bias:
-            self._bias_grad = self.bias_gradients(intra_grad)
+            self._bias_grad = self.bias_gradients(batch_grad)
 
-        self._out_grad = self.input_gradients(intra_grad)
+        self._out_grad = self.input_gradients(batch_grad)
         return self._out_grad
 
     def update_weights(self, alpha):
@@ -295,10 +330,10 @@ class NN:
             l.reinitialize_weights()
 
 
-    def forward(self, inputs):
+    def forward(self, inputs, inference=False):
         layer_inp = inputs
         for l in self._layers:
-            layer_out = l.forward(layer_inp)
+            layer_out = l.forward(layer_inp, inference=inference)
             layer_inp = layer_out
         self._network_out = layer_out
         return self._network_out
@@ -306,7 +341,7 @@ class NN:
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
         if self._network_out is None:
-            _ = self.forward(inputs)
+            _ = self.forward(inputs, inference=False)
 
         layer_inp_grad = inp_grad
         for l in reversed(self._layers):

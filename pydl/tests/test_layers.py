@@ -54,9 +54,9 @@ class TestLayers(unittest.TestCase):
 
 
     def test_forward(self):
-        def test(inp, w, true_out, bias=False, activation_fn='Sigmoid', batchnorm=False):
-            fc = FC(inp, w.shape[-1], w, bias, activation_fn=activation_fn, batchnorm=batchnorm)
-            out_fc = fc.forward(inp)
+        def test(inp, w, true_out, bias=False, actv_fn='Sigmoid', bchnorm=False, p=None, mask=None):
+            fc = FC(inp, w.shape[-1], w, bias, activation_fn=actv_fn, batchnorm=bchnorm, dropout=p)
+            out_fc = fc.forward(inp, mask=mask)
             npt.assert_almost_equal(out_fc, true_out, decimal=5)
 
         # Manually calculated
@@ -80,9 +80,11 @@ class TestLayers(unittest.TestCase):
         num_neurons = [1, 2, 3, 6, 11]
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
         batchnorm = [True, False]
+        dropout = [True, False]
 
-        for batch, feat, scl, neur, bn in list(itertools.product(batch_size, feature_size, scale,
-                                                                 num_neurons, batchnorm)):
+        for batch, feat, scl, neur, bn, dout in \
+            list(itertools.product(batch_size, feature_size, scale, num_neurons, batchnorm,
+                 dropout)):
             X = np.random.uniform(-scl, scl, (batch, feat))
             w = np.random.randn(feat, neur) * scl
             bias = np.zeros(neur)
@@ -90,17 +92,44 @@ class TestLayers(unittest.TestCase):
             if bn:
                 score = (score - np.mean(score, axis=0)) / np.sqrt(np.var(score, axis=0) + 1e-32)
 
+            if dout:
+                p = np.random.rand()
+                mask = np.array(np.random.rand(*score.shape) < p, dtype=conf.dtype)
+            else:
+                p = None
+                mask = None
+
             true_out_sig = 1.0 / (1.0 + np.exp(-np.matmul(X, w)))
-            test(X, w, true_out_sig, bias=False, activation_fn='Sigmoid', batchnorm=False)
+            if dout:
+                true_out_sig *= mask
+            test(X, w, true_out_sig, bias=False, actv_fn='Sigmoid', bchnorm=False, p=p, mask=mask)
 
             true_out_sig = 1.0 / (1.0 + np.exp(-score))
-            test(X, w, true_out_sig, bias, activation_fn='Sigmoid', batchnorm=bn)
+            if dout:
+                true_out_sig *= mask
+            test(X, w, true_out_sig, bias, actv_fn='Sigmoid', bchnorm=bn, p=p, mask=mask)
 
             true_out_tanh = (2.0 / (1.0 + np.exp(-2.0 * score))) - 1.0
-            test(X, w, true_out_tanh, bias, activation_fn='Tanh', batchnorm=bn)
+            if dout:
+                true_out_tanh *= mask
+            test(X, w, true_out_tanh, bias, actv_fn='Tanh', bchnorm=bn, p=p, mask=mask)
+
+            unnorm_prob = np.exp(score)
+            true_out_softmax = unnorm_prob / np.sum(unnorm_prob, axis=-1, keepdims=True)
+            if dout:
+                true_out_softmax *= mask
+            test(X, w, true_out_softmax, bias, actv_fn='Softmax', bchnorm=bn, p=p, mask=mask)
 
             true_out_relu = np.maximum(0, score)
-            test(X, w, true_out_relu, bias, activation_fn='ReLU', batchnorm=bn)
+            if dout:
+                mask /= p
+                true_out_relu *= mask
+            test(X, w, true_out_relu, bias, actv_fn='ReLU', bchnorm=bn, p=p, mask=mask)
+
+            true_out_linear = score
+            if dout:
+                true_out_linear *= mask
+            test(X, w, true_out_linear, bias, actv_fn='Linear', bchnorm=bn, p=p, mask=mask)
 
 
     def test_gradients_manually(self):
@@ -245,9 +274,10 @@ class TestLayers(unittest.TestCase):
 
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
-        def test(inp, w, inp_grad, bias=False, activation_fn='Sigmoid', batchnorm=False):
-            fc = FC(inp, w.shape[-1], w, bias, activation_fn=activation_fn, batchnorm=batchnorm)
-            y = fc.forward(inp)
+        def test(inp, w, inp_grad, bias=False, actv_fn='Sigmoid', batchnorm=False, p=None,
+                 mask=None):
+            fc = FC(inp, w.shape[-1], w, bias, activation_fn=actv_fn, batchnorm=batchnorm, dropout=p)
+            y = fc.forward(inp, mask=mask)
             inputs_grad = fc.backward(inp_grad)
             weights_grad = fc.weights_grad
             bias_grad = fc.bias_grad
@@ -259,9 +289,9 @@ class TestLayers(unittest.TestCase):
                     w_delta = np.zeros(w.shape, dtype=conf.dtype)
                     w_delta[i,j] = self.delta
                     fc.weights = w + w_delta
-                    lhs = fc.forward(inp)
+                    lhs = fc.forward(inp, mask=mask)
                     fc.weights = w - w_delta
-                    rhs = fc.forward(inp)
+                    rhs = fc.forward(inp, mask=mask)
                     weights_finite_diff[i,j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
                     # Replace finite-diff gradients calculated close to 0 with NN calculated
@@ -277,9 +307,9 @@ class TestLayers(unittest.TestCase):
                 bias_delta = np.zeros(bias.shape, dtype=conf.dtype)
                 bias_delta[i] = self.delta
                 fc.bias = bias + bias_delta
-                lhs = fc.forward(inp)
+                lhs = fc.forward(inp, mask=mask)
                 fc.bias = bias - bias_delta
-                rhs = fc.forward(inp)
+                rhs = fc.forward(inp, mask=mask)
                 bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
                 # Replace finite-diff gradients calculated close to 0 with NN calculated
@@ -295,8 +325,8 @@ class TestLayers(unittest.TestCase):
                 for j in range(inputs_grad.shape[1]):
                     i_delta = np.zeros(inp.shape, dtype=conf.dtype)
                     i_delta[i,j] = self.delta
-                    lhs = fc.forward(inp + i_delta)
-                    rhs = fc.forward(inp - i_delta)
+                    lhs = fc.forward(inp + i_delta, mask=mask)
+                    rhs = fc.forward(inp - i_delta, mask=mask)
                     inputs_finite_diff[i,j] = np.sum(((lhs-rhs) / (2*self.delta)) * inp_grad,
                                                      keepdims=False)
 
@@ -318,10 +348,21 @@ class TestLayers(unittest.TestCase):
                       [9, 10, 11, 12]], dtype=conf.dtype)
         bias = np.array([0.1, 0.2, 0.3, 0.4], dtype=conf.dtype)
         inp_grad = np.ones((2, 4), dtype=conf.dtype)
-        activation_fn = ['Sigmoid', 'Tanh', 'Softmax']
+        activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'Softmax']
         batchnorm = [True, False]
-        for actv_fn, bn in list(itertools.product(activation_fn, batchnorm)):
-            test(X, w, inp_grad, bias, activation_fn=actv_fn, batchnorm=bn)
+        dropout = [True, False]
+        for actv, bn, dout in list(itertools.product(activation_fn, batchnorm, dropout)):
+            if dout and actv == 'Softmax':
+                continue
+            if dout:
+                p = np.random.rand()
+                mask = np.array(np.random.rand(*inp_grad.shape) < p, dtype=conf.dtype)
+                if actv in ['Linear', 'ReLU']:
+                     mask /=  p
+            else:
+                p = None
+                mask = None
+            test(X, w, inp_grad, bias, actv, bn, p, mask)
 
         # Manually calculated
         X = np.array([[1, 2, 3],
@@ -332,10 +373,21 @@ class TestLayers(unittest.TestCase):
         bias = np.array([0.1, 0.2, 0.3, 0.4], dtype=conf.dtype)
         inp_grad = np.array([[5, 6, 7, 8],
                              [1, 2, 3, 4]], dtype=conf.dtype)
-        activation_fn = ['Sigmoid', 'Tanh', 'Softmax']
+        activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'Softmax']
         batchnorm = [True, False]
-        for actv_fn, bn in list(itertools.product(activation_fn, batchnorm)):
-            test(X, w, inp_grad, bias, activation_fn=actv_fn, batchnorm=bn)
+        dropout = [True, False]
+        for actv, bn, dout in list(itertools.product(activation_fn, batchnorm, dropout)):
+            if dout and actv == 'Softmax':
+                continue
+            if dout:
+                p = np.random.rand()
+                mask = np.array(np.random.rand(*inp_grad.shape) < p, dtype=conf.dtype)
+                if actv in ['Linear', 'ReLU']:
+                     mask /=  p
+            else:
+                p = None
+                mask = None
+            test(X, w, inp_grad, bias, actv, bn, p, mask)
 
         # Combinatorial Test Cases
         # ------------------------
@@ -344,12 +396,16 @@ class TestLayers(unittest.TestCase):
         num_neurons = [1, 2, 3, 11]
         scale = [1e-3, 1e-0, 2]
         unit_inp_grad = [True, False]
-        activation_fn = ['Sigmoid', 'Tanh', 'Softmax', 'ReLU']
+        activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'Softmax', 'ReLU']
         batchnorm = [True, False]
+        dropout = [True, False]
 
-        for batch, feat, neur, scl, unit, actv, bn in \
+        for batch, feat, neur, scl, unit, actv, bn, dout in \
             list(itertools.product(batch_size, feature_size, num_neurons, scale, unit_inp_grad,
-                                   activation_fn, batchnorm)):
+                                   activation_fn, batchnorm, dropout)):
+            if dout and actv == 'Softmax':
+                continue
+
             X = np.random.uniform(-scl, scl, (batch, feat))
             w = np.random.randn(feat, neur) * scl
             # bias = np.random.randn(neur) * scl
@@ -357,7 +413,17 @@ class TestLayers(unittest.TestCase):
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
                        np.random.uniform(-1, 1, (batch, neur))
-            test(X, w, inp_grad, bias, actv, bn)
+
+            if dout:
+                p = np.random.rand()
+                mask = np.array(np.random.rand(batch, neur) < p, dtype=conf.dtype)
+                if actv in ['Linear', 'ReLU']:
+                     mask /=  p
+            else:
+                p = None
+                mask = None
+
+            test(X, w, inp_grad, bias, actv, bn, p, mask)
 
 
 class TestNN(unittest.TestCase):
