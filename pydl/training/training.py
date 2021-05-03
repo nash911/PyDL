@@ -96,7 +96,7 @@ class Training(ABC):
 
     def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None,
                            y_onehot=False):
-        sample_size = len(X)
+        sample_size = X.shape[0]
 
         if train_size is None:
             train_size = self._train_size
@@ -295,6 +295,7 @@ class Training(ABC):
         axs[1].plot(x_values, train_accuracy, color='red', label='Train Accuracy')
         axs[1].plot(x_values, test_accuracy, color='blue', label='Test Accuracy')
         axs[1].set(ylabel='Accuracy(%)')
+        axs[1].set(xlabel='Epoch')
         axs[1].legend(loc='lower right')
 
         plt.show(block=False)
@@ -319,6 +320,9 @@ class Training(ABC):
                 self.reduce_data_dimensions(self._test_X, dims=dims, mean=mean, U=U, S=S,
                                             N=self._train_X.shape[0])
             self._nn.layers[0].reinitialize_weights(inputs=self._train_X)
+
+        print("Training Data::\n", self._train_X.shape)
+        print("Test Data:\n", self._test_X.shape)
 
 
     def train(self, batch_size=256, epochs=100, plot=None, log_freq=1000):
