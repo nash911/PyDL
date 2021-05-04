@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import time
+from collections import OrderedDict
 
 from pydl import conf
 
@@ -265,19 +266,24 @@ class Training(ABC):
         return accuracy
 
 
-    def print_log(self, epoch, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
-                  test_accuracy):
+    def print_log(self, epoch, plot, fig, axs, train_l, epochs_list, train_loss, test_loss,
+                  train_accuracy, test_accuracy):
         test_l = self.loss(self._test_X, self._test_y, inference=True)
         train_accur = self.evaluate(self._train_X, self._train_y, inference=True)
         test_accur = self.evaluate(self._test_X, self._test_y, inference=True)
+
+        # Store training logs
+        epochs_list.append(epoch)
+        train_loss.append(train_l)
+        test_loss.append(test_l)
+        train_accuracy.append(train_accur)
+        test_accuracy.append(test_accur)
+
+        # Print training logs
         print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
               (epoch, train_l, test_l, train_accur, test_accur))
 
         if plot:
-            train_loss.append(train_l)
-            test_loss.append(test_l)
-            train_accuracy.append(train_accur)
-            test_accuracy.append(test_accur)
             self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
                                      test_accuracy)
 
@@ -334,6 +340,7 @@ class Training(ABC):
         else:
             fig = axs = None
 
+        epochs_list = list()
         train_loss = list()
         test_loss = list()
         train_accuracy = list()
@@ -341,8 +348,8 @@ class Training(ABC):
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
         init_train_l = self.loss(self._train_X, self._train_y, inference=False)
-        self.print_log(0, plot, fig, axs, init_train_l, train_loss, test_loss, train_accuracy,
-                       test_accuracy)
+        self.print_log(0, plot, fig, axs, init_train_l, epochs_list, train_loss, test_loss,
+                       train_accuracy, test_accuracy)
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -359,11 +366,20 @@ class Training(ABC):
                 self.update_network(e+1)
 
             if (e+1) % log_freq == 0:
-                self.print_log(e+1, plot, fig, axs, train_l, train_loss, test_loss, train_accuracy,
-                               test_accuracy)
+                self.print_log(e+1, plot, fig, axs, train_l, epochs_list, train_loss, test_loss,
+                               train_accuracy, test_accuracy)
+
+        training_logs_dict = OrderedDict()
+        training_logs_dict['epochs'] = epochs_list
+        training_logs_dict['train_loss'] = train_loss
+        training_logs_dict['test_loss'] = test_loss
+        training_logs_dict['train_accuracy'] = train_accuracy
+        training_logs_dict['test_accuracy'] = test_accuracy
 
         end_time = time.time()
         print("\nTraining Time: %.2f(s)" % (end_time-start_time))
+
+        return training_logs_dict
 
 
 class SGD(Training):
@@ -378,7 +394,9 @@ class SGD(Training):
         self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
                           batch_size=batch_size, y_onehot=y_onehot)
 
-        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+        training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
+                                           log_freq=log_freq)
+        return training_logs_dict
 
 
     def update_network(self, t=None):
@@ -408,7 +426,9 @@ class Momentum(Training):
                  'b': np.zeros_like(l.bias)}
             self._vel.append(v)
 
-        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+        training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
+                                           log_freq=log_freq)
+        return training_logs_dict
 
 
     def update_network(self, t=None):
@@ -440,7 +460,9 @@ class RMSprop(Training):
                  'b': np.zeros_like(l.bias)}
             self._cache.append(c)
 
-        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+        training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
+                                           log_freq=log_freq)
+        return training_logs_dict
 
 
     def update_network(self, t=None):
@@ -478,7 +500,9 @@ class Adam(Training):
                  'b': np.zeros_like(l.bias)}
             self._v.append(v)
 
-        super().train(batch_size=batch_size, epochs=epochs, plot=plot, log_freq=log_freq)
+        training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
+                                           log_freq=log_freq)
+        return training_logs_dict
 
 
     def update_network(self, t):
