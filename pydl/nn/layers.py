@@ -312,6 +312,10 @@ class NN:
 
     @property
     def num_classes(self):
+        return 2 if self._layers[-1].num_neurons == 1 else self._layers[-1].num_neurons
+
+    @property
+    def num_output_neurons(self):
         return self._layers[-1].num_neurons
 
 

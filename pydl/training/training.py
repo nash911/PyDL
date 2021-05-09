@@ -37,6 +37,19 @@ class Training(ABC):
         else:
             sys.exit("Error: Please specify activation_type for instance of class Training")
 
+        self._binary_classification = False
+        if nn is not None:
+            if self._nn.num_output_neurons == 1:
+                if self._activatin_type.lower() == 'sigmoid':
+                    self._binary_classification = True
+                else:
+                    sys.exit("Error: For binary classification task with a single output neuron, " +
+                             "please choose 'Sigmoid' activation function instead of " +
+                             self._activatin_type.lower())
+            elif self._nn.num_output_neurons == 2:
+                print("WARNING: Network with two output neurons. Instead choose a single output " +
+                      "neuron with Sigmoid activation function, for binary classification.")
+
         if train_size + test_size == 100:
             self._train_size = train_size / 100.0
             self._test_size = test_size / 100.0
@@ -113,7 +126,17 @@ class Training(ABC):
             X = X[order]
             y = y[order]
 
-        if y_onehot and len(y.shape) == 1:
+        if self._binary_classification and y_onehot:
+            sys.exit("Error: For binary classification task, class labels will not be " +
+                     "represented as One-Hot vectors. Set 'y_onehot' parameter to False in the " +
+                     "function call Training.shuffle_split_data().")
+
+        if self._binary_classification:
+            if len(y.shape) == 1:
+                labels = np.reshape(y, newshape=(-1, 1))
+            elif len(y.shape) == 2:
+                labels = np.reshape(np.argmax(y, axis=-1), newshape=(-1, 1))
+        elif y_onehot and len(y.shape) == 1:
             # Convert labels to one-hot vector
             if self._nn is None:
                 labels = np.zeros((y.size, y.max()+1))
@@ -217,9 +240,12 @@ class Training(ABC):
         elif len(y.shape) == 2: # y --> OneHot Representation
             neg_ln_prob = np.nan_to_num(neg_ln_prob)
             neg_ln_one_mns_prob = np.nan_to_num(neg_ln_one_mns_prob)
-            neg_ln_prob *= y
-            neg_ln_one_mns_prob *= (1.0 - y)
-            logistic_probs = neg_ln_prob + neg_ln_one_mns_prob
+            if self._binary_classification:
+                logistic_probs = (y * neg_ln_prob) + ((1-y) * neg_ln_one_mns_prob)
+            else:
+                neg_ln_prob *= y
+                neg_ln_one_mns_prob *= (1-y)
+                logistic_probs = neg_ln_prob + neg_ln_one_mns_prob
 
         if self._nn is not None and self._lambda > 0:
             nn_weights = self._nn.weights
@@ -244,9 +270,13 @@ class Training(ABC):
             loss_grad = (1.0 / (1.0 - self._class_prob))
             loss_grad[range(y.size), y] = -1.0 / self._class_prob[range(y.size), y]
         elif len(y.shape) == 2: # y --> OneHot Representation
-            neg_ln_prob_grad = np.nan_to_num(-1.0 / self._class_prob) * y
-            neg_ln_one_mns_prob_grad = np.nan_to_num(1.0 / (1.0 - self._class_prob)) * (1 - y)
-            loss_grad = neg_ln_prob_grad + neg_ln_one_mns_prob_grad
+            if self._binary_classification:
+                loss_grad = (y * np.nan_to_num(-1.0 / self._class_prob)) + \
+                            ((1-y) * np.nan_to_num(1.0 / (1.0-self._class_prob)))
+            else:
+                neg_ln_prob_grad = np.nan_to_num(-1.0 / self._class_prob) * y
+                neg_ln_one_mns_prob_grad = np.nan_to_num(1.0 / (1.0 - self._class_prob)) * (1 - y)
+                loss_grad = neg_ln_prob_grad + neg_ln_one_mns_prob_grad
 
         self._class_prob = None
         return loss_grad / y.shape[0]
@@ -254,9 +284,12 @@ class Training(ABC):
 
     def evaluate(self, X, y, inference=True):
         test_prob = self._nn.forward(X, inference)
-        pred = np.argmax(test_prob, axis=-1)
+        if self._binary_classification:
+            pred = np.array(test_prob >= 1-test_prob, dtype=np.int32)
+        else:
+            pred = np.argmax(test_prob, axis=-1)
 
-        if len(y.shape) == 1: # y --> Class labels
+        if self._binary_classification or len(y.shape) == 1: # y --> Class labels
             accuracy = np.mean(pred == y) * 100.0
         elif len(y.shape) == 2: # y --> OneHot Representation
             pred_onehot = np.zeros((pred.size, self._nn.num_classes))
@@ -327,7 +360,7 @@ class Training(ABC):
                                             N=self._train_X.shape[0])
             self._nn.layers[0].reinitialize_weights(inputs=self._train_X)
 
-        print("Training Data::\n", self._train_X.shape)
+        print("Training Data:\n", self._train_X.shape)
         print("Test Data:\n", self._test_X.shape)
 
 

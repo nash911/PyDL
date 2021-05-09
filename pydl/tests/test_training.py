@@ -254,6 +254,7 @@ class TestTraining(unittest.TestCase):
             l4 = FC(l3, num_neurons=9, activation_fn='Tanh', batchnorm=bn)
             l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=bn) # SoftMax Probs
             l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=bn) # Sigmoid Probs
+            l5_c = FC(l4, num_neurons=1, activation_fn='Sigmoid', batchnorm=bn) # Binary Classification
 
             # SoftMax Probs
             layers = [l1, l2, l3, l4, l5_a]
@@ -280,6 +281,17 @@ class TestTraining(unittest.TestCase):
 
             reg_list = [0, 1e-6, 1e-3, 1e-0]
             y_list = [labels, labels_onehot, multiclass_onehot]
+            for reg, y in list(itertools.product(reg_list, y_list)):
+                test(X, y, layers, reg_lambda=reg)
+
+            # Binary Classification - Sigmoid Probs
+            layers = [l1, l2, l3, l4, l5_c]
+            k = 2
+            labels = np.random.randint(k, size=(X.shape[0]))
+            labels = np.reshape(labels, newshape=(-1,1))
+
+            reg_list = [0, 1e-6, 1e-3, 1e-0]
+            y_list = [labels]
             for reg, y in list(itertools.product(reg_list, y_list)):
                 test(X, y, layers, reg_lambda=reg)
 
