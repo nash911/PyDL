@@ -24,13 +24,17 @@ class Training(ABC):
     """
 
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
-                 activatin_type=None, name=None):
+                 activatin_type=None, regression=False, name=None):
         self._nn = nn
         self._step_size = step_size
         self._lambda = reg_lambda
+        self._regression = regression
         self._name = name
 
-        if activatin_type is not None:
+        if self._regression:
+            # Regression task, so setting nn activation_type to None
+            self._activatin_type = None
+        elif activatin_type is not None:
             self._activatin_type = activatin_type
         elif nn is not None:
             self._activatin_type = self._nn.layers[-1].activation
@@ -38,7 +42,7 @@ class Training(ABC):
             sys.exit("Error: Please specify activation_type for instance of class Training")
 
         self._binary_classification = False
-        if nn is not None:
+        if nn is not None and not self._regression:
             if self._nn.num_output_neurons == 1:
                 if self._activatin_type.lower() == 'sigmoid':
                     self._binary_classification = True
@@ -59,6 +63,7 @@ class Training(ABC):
 
         self._train_X =  self._train_y = self._test_X = self._test_y = None
         self._class_prob = None
+        self._prediction_delta = None
 
 
     def mean_normalize(self, X, mean=None, std=None):
@@ -131,7 +136,9 @@ class Training(ABC):
                      "represented as One-Hot vectors. Set 'y_onehot' parameter to False in the " +
                      "function call Training.shuffle_split_data().")
 
-        if self._binary_classification:
+        if self._regression:
+            labels = np.reshape(y, newshape=(-1, 1))
+        elif self._binary_classification:
             if len(y.shape) == 1:
                 labels = np.reshape(y, newshape=(-1, 1))
             elif len(y.shape) == 2:
@@ -157,21 +164,65 @@ class Training(ABC):
 
 
     def loss(self, X, y, inference=False, prob=None):
-        if 'softmax' in self._activatin_type.lower():
-            return self.softmax_cross_entropy_loss(X, y, inference, prob)
-        elif 'sigmoid' in self._activatin_type.lower():
-            return self.sigmoid_cross_entropy_loss(X, y, inference, prob)
+        if self._regression:
+            return self.mse_loss(X, y, inference, pred=prob)
         else:
-            sys.exit("Error: Unknown activation_type: ", self._activation_fn)
+            if 'softmax' in self._activatin_type.lower():
+                return self.softmax_cross_entropy_loss(X, y, inference, prob)
+            elif 'sigmoid' in self._activatin_type.lower():
+                return self.sigmoid_cross_entropy_loss(X, y, inference, prob)
+            else:
+                sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
 
     def loss_gradient(self, X, y, inference=False, prob=None):
-        if 'softmax' in self._activatin_type.lower():
-            return self.softmax_cross_entropy_gradient(X, y, inference, prob)
-        elif 'sigmoid' in self._activatin_type.lower():
-            return self.sigmoid_cross_entropy_gradient(X, y, inference, prob)
+        if self._regression:
+            return self.mse_gradient(X, y, inference)
         else:
-            sys.exit("Error: Unknown activation_type: ", self._activation_fn)
+            if 'softmax' in self._activatin_type.lower():
+                return self.softmax_cross_entropy_gradient(X, y, inference, prob)
+            elif 'sigmoid' in self._activatin_type.lower():
+                return self.sigmoid_cross_entropy_gradient(X, y, inference, prob)
+            else:
+                sys.exit("Error: Unknown activation_type: ", self._activation_fn)
+
+
+    def mse_loss(self, X, y, inference=False, pred=None):
+        if pred is None:
+            prediction = self._nn.forward(X, inference)
+        else:
+            prediction = pred
+
+        #        1  m
+        # MSE = --- ∑ (ŷᵢ - yᵢ)²
+        #       2m  i
+        self._prediction_delta = y - prediction
+        data_loss = 0.5 * np.mean(np.square(self._prediction_delta))
+
+        if not inference and self._nn is not None and self._lambda > 0:
+            nn_weights = self._nn.weights
+            regularization_loss = 0
+            for w in nn_weights:
+                regularization_loss += np.sum(w * w)
+            regularization_loss *= (0.5 * self._lambda)
+        else:
+            regularization_loss = 0
+
+        # MSE Cost Fn.
+        return data_loss + regularization_loss
+
+
+    def mse_gradient(self, X, y, inference=False):
+        if self._prediction_delta is None:
+            _ = self._nn.forward(X, inference)
+
+        # ∂MSE      1
+        # ---- = - --- (ŷᵢ - yᵢ)
+        #  ∂yᵢ      m
+        loss_grad = -self._prediction_delta / self._prediction_delta.shape[0]
+
+        self._prediction_delta = None
+        return loss_grad
 
 
     def softmax_cross_entropy_loss(self, X, y, inference=False, prob=None):
@@ -302,8 +353,13 @@ class Training(ABC):
     def print_log(self, epoch, plot, fig, axs, train_l, epochs_list, train_loss, test_loss,
                   train_accuracy, test_accuracy):
         test_l = self.loss(self._test_X, self._test_y, inference=True)
-        train_accur = self.evaluate(self._train_X, self._train_y, inference=True)
-        test_accur = self.evaluate(self._test_X, self._test_y, inference=True)
+        if self._regression:
+            train_l = self.loss(self._train_X, self._train_y, inference=True)
+            train_accur = np.sqrt(train_l)
+            test_accur = np.sqrt(test_l)
+        else: # Classification
+            train_accur = self.evaluate(self._train_X, self._train_y, inference=True)
+            test_accur = self.evaluate(self._test_X, self._test_y, inference=True)
 
         # Store training logs
         epochs_list.append(epoch)
@@ -335,7 +391,7 @@ class Training(ABC):
         axs[1].plot(x_values, test_accuracy, color='blue', label='Test Accuracy')
         axs[1].set(ylabel='Accuracy(%)')
         axs[1].set(xlabel='Epoch')
-        axs[1].legend(loc='lower right')
+        axs[1].legend(loc='upper right' if self._regression else'lower right')
 
         plt.show(block=False)
         plt.pause(0.01)
@@ -417,9 +473,10 @@ class Training(ABC):
 
 class SGD(Training):
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
-                 activatin_type=None, name=None):
+                 activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
-                         test_size=test_size, activatin_type=activatin_type, name=name)
+                         test_size=test_size, activatin_type=activatin_type, regression=regression,
+                         name=name)
 
 
     def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
@@ -441,9 +498,10 @@ class SGD(Training):
 
 class Momentum(Training):
     def __init__(self, nn=None, step_size=1e-2, mu=0.5, reg_lambda=1e-4, train_size=70, test_size=30,
-                 activatin_type=None, name=None):
+                 activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
-                         test_size=test_size, activatin_type=activatin_type, name=name)
+                         test_size=test_size, activatin_type=activatin_type, regression=regression,
+                         name=name)
         self._mu = mu
         self._vel = list()
 
@@ -475,9 +533,10 @@ class Momentum(Training):
 
 class RMSprop(Training):
     def __init__(self, nn=None, step_size=1e-2, beta=0.999, reg_lambda=1e-4, train_size=70,
-                 test_size=30, activatin_type=None, name=None):
+                 test_size=30, activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
-                         test_size=test_size, activatin_type=activatin_type, name=name)
+                         test_size=test_size, activatin_type=activatin_type, regression=regression,
+                         name=name)
         self._beta = beta
         self._cache = list()
 
@@ -509,9 +568,10 @@ class RMSprop(Training):
 
 class Adam(Training):
     def __init__(self, nn=None, step_size=1e-2, beta_1=0.9, beta_2=0.999, reg_lambda=1e-4,
-                 train_size=70, test_size=30, activatin_type=None, name=None):
+                 train_size=70, test_size=30, activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
-                         test_size=test_size, activatin_type=activatin_type, name=name)
+                         test_size=test_size, activatin_type=activatin_type, regression=regression,
+                         name=name)
         self._beta_1 = beta_1
         self._beta_2 = beta_2
         self._m = list()

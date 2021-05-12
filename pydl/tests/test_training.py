@@ -69,6 +69,24 @@ class TestTraining(unittest.TestCase):
             test(X, y, y_onehot, shfl, t_sz, (100.0 - t_sz), oh)
 
 
+    def test_mse_loss(self):
+        def test(X, y, pred, true_out):
+            train = Training(nn=None, regression=True)
+            loss = train.loss(X, y, prob=pred)
+            self.assertAlmostEqual(loss, true_out, places=6)
+
+        # Combinatorial Test Cases
+        # ------------------------
+        batch_size = [100, 256]
+        feature_size = [1, 2, 3, 6, 11]
+        for batch, feat in list(itertools.product(batch_size, feature_size)):
+            X = np.random.uniform(1, 2, (batch, feat))
+            pred = np.random.uniform(-1, 1, (batch))
+            y = np.random.uniform(-1, 1, (batch))
+            true_out = 0.5 * np.mean(np.square(y - pred))
+            test(X, y, pred, true_out)
+
+
     def test_softmax_loss(self):
         def test(X, y, prob, true_out):
             train = Training(nn=None, activatin_type='Softmax')
@@ -159,9 +177,9 @@ class TestTraining(unittest.TestCase):
 
     def test_loss_gradient_finite_diff(self):
         self.delta = 1e-3
-        def test(X, y, layers, reg_lambda=0):
+        def test(X, y, layers, reg_lambda=0, regression=False):
             nn = NN(X, layers)
-            train = Training(nn, reg_lambda=reg_lambda)
+            train = Training(nn, reg_lambda=reg_lambda, regression=regression)
             loss = train.loss(X, y)
             loss_grad = train.loss_gradient(X, y)
             inputs_grad = nn.backward(loss_grad, reg_lambda=reg_lambda)
@@ -252,9 +270,10 @@ class TestTraining(unittest.TestCase):
             l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid', batchnorm=bn)
             l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid', batchnorm=bn)
             l4 = FC(l3, num_neurons=9, activation_fn='Tanh', batchnorm=bn)
-            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=bn) # SoftMax Probs
-            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=bn) # Sigmoid Probs
-            l5_c = FC(l4, num_neurons=1, activation_fn='Sigmoid', batchnorm=bn) # Binary Classification
+            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=False) # SoftMax Probs
+            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=False) # Sigmoid Probs
+            l5_c = FC(l4, num_neurons=1, activation_fn='Sigmoid', batchnorm=False) # Binary Classification
+            l5_d = FC(l4, num_neurons=1, activation_fn='Linear', batchnorm=False) # Regression
 
             # SoftMax Probs
             layers = [l1, l2, l3, l4, l5_a]
@@ -295,6 +314,12 @@ class TestTraining(unittest.TestCase):
             for reg, y in list(itertools.product(reg_list, y_list)):
                 test(X, y, layers, reg_lambda=reg)
 
+            # Regression NN
+            layers = [l1, l2, l3, l4, l5_d]
+            y = np.random.uniform(-1, 1, (100, 1))
+            reg_list = [0, 1e-6, 1e-3, 1e-0]
+            for reg in reg_list:
+                test(X, y, layers, reg_lambda=reg, regression=True)
 
 if __name__ == '__main__':
     unittest.main()

@@ -169,7 +169,7 @@ class FC(Layer):
         else:
             self._batchnorm = None
 
-        if dropout is not None:
+        if dropout is not None and dropout < 1.0:
             self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
         else:
             self._dropout = None
