@@ -9,6 +9,7 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
+import warnings
 
 from pydl.nn.activations import Linear
 from pydl.nn.activations import Sigmoid
@@ -45,6 +46,8 @@ class Layer(ABC):
         self._weights_grad = None
         self._bias_grad = None
         self._out_grad = None
+
+        self._dropout_mask = None
 
     # Getters
     # -------
@@ -104,6 +107,10 @@ class Layer(ABC):
     def out_grad(self):
         return self._out_grad
 
+    @property
+    def dropout_mask(self):
+        return self._dropout_mask
+
     # Setters
     # -------
     @weights.setter
@@ -115,6 +122,14 @@ class Layer(ABC):
     def bias(self, b):
         assert(b.shape == self._bias.shape)
         self._bias = b
+
+    @dropout_mask.setter
+    def dropout_mask(self, d_mask):
+        warnings.warn("\nWARNING! Setting dropout_mask for a layer. Preset dropout mask should " +
+                      "only be used for gradient checking in test mode. If training, undo this!")
+        if d_mask is not None:
+            assert(d_mask.shape[-1] == self.num_neurons)
+        self._dropout_mask = d_mask
 
     # Abstract Methods
     # ----------------
@@ -260,7 +275,8 @@ class FC(Layer):
         if self._dropout is not None:
             if not inference: # Training step
                 # Apply Dropout Mask
-                self._output = self._dropout.forward(self._output, mask)
+                self._output = self._dropout.forward(self._output, mask if self.dropout_mask is None
+                                                     else self.dropout_mask)
             else: # Inference
                  if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
                      self._output *= self.dropout.p

@@ -542,7 +542,7 @@ class TestNN(unittest.TestCase):
                         rhs = nn.forward(inp)
                         gamma_finite_diff[i] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
                     bn.gamma = gamma
-                    npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=5)
+                    npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=4)
 
                     # Beta finite difference gradients
                     beta_finite_diff = np.empty(beta_grad.shape)
@@ -555,7 +555,7 @@ class TestNN(unittest.TestCase):
                         rhs = nn.forward(inp)
                         beta_finite_diff[i] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
                     bn.beta = beta
-                    npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=5)
+                    npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=4)
 
             # Inputs finite difference gradients
             inputs_finite_diff = np.empty(inputs_grad.shape)
@@ -566,54 +566,108 @@ class TestNN(unittest.TestCase):
                     inputs_finite_diff[i,j] = np.sum(((nn.forward(inp + i_delta) -
                                                        nn.forward(inp - i_delta)) /
                                                        (2 * self.delta)) * inp_grad)
-            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=3)
+            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
 
         for _ in range(1):
             # NN Architecture
             # Layer 1
-            X = np.random.uniform(-1, 1, (10, 25))
-            w_1 = np.random.randn(X.shape[-1], 19)
-            b_1 = np.random.uniform(-1, 1, (1, 19))
+            batch_size = 10
+            X = np.random.uniform(-1, 1, (batch_size, 25))
+            w_1 = np.random.randn(X.shape[-1], 30)
+            b_1 = np.random.uniform(-1, 1, (1, 30))
 
             # Layer 2
-            w_2 = np.random.randn(w_1.shape[-1], 15)
-            b_2 = np.random.uniform(-1, 1, (1, 15))
+            w_2 = np.random.randn(w_1.shape[-1], 23)
+            b_2 = np.random.uniform(-1, 1, (1, 23))
 
             # Layer 3
-            w_3 = np.random.randn(w_2.shape[-1], 11)
-            b_3 = np.random.uniform(-1, 1, (1, 11))
+            w_3 = np.random.randn(w_2.shape[-1], 16)
+            b_3 = np.random.uniform(-1, 1, (1, 16))
 
             # Layer 4
-            w_4 = np.random.randn(w_3.shape[-1], 9)
-            b_4 = np.random.uniform(-1, 1, (1, 9))
+            w_4 = np.random.randn(w_3.shape[-1], 19)
+            b_4 = np.random.uniform(-1, 1, (1, 19))
 
             # Layer 5
-            w_5 = np.random.randn(w_4.shape[-1], 7)
-            b_5 = np.random.uniform(-1, 1, (1, 7))
+            w_5 = np.random.randn(w_4.shape[-1], 11)
+            b_5 = np.random.uniform(-1, 1, (1, 11))
+
+            # Layer 6
+            w_6 = np.random.randn(w_5.shape[-1], 9)
+            b_6 = np.random.uniform(-1, 1, (1, 9))
+
+            # Layer 7
+            w_7 = np.random.randn(w_6.shape[-1], 7)
+            b_7 = np.random.uniform(-1, 1, (1, 7))
+
 
             # Case-1
             # ------
             l1_a = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh')
             l2_a = FC(l1_a, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid')
             l3_a = FC(l2_a, w_3.shape[-1], w_3, b_3, activation_fn='Tanh')
-            l4_a = FC(l3_a, w_4.shape[-1], w_4, b_4, activation_fn='Sigmoid')
-            l5_a = FC(l4_a, w_5.shape[-1], w_5, b_5, activation_fn='SoftMax')
+            l4_a = FC(l3_a, w_4.shape[-1], w_4, b_4, activation_fn='Linear')
+            l5_a = FC(l4_a, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid')
+            l6_a = FC(l5_a, w_6.shape[-1], w_6, b_6, activation_fn='Linear')
+            l7_a = FC(l6_a, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax')
 
-            # 5-Layers
-            layers = [l1_a, l2_a, l3_a, l4_a, l5_a]
-            test(X, layers)
+            layers_a = [l1_a, l2_a, l3_a, l4_a, l5_a, l6_a, l7_a]
+            test(X, layers_a)
 
             # Case-2: With BatchNorm
             # ----------------------
             l1_b = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', batchnorm=False)
             l2_b = FC(l1_b, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', batchnorm=True)
             l3_b = FC(l2_b, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True)
-            l4_b = FC(l3_b, w_4.shape[-1], w_4, b_4, activation_fn='Sigmoid', batchnorm=False)
-            l5_b = FC(l4_b, w_5.shape[-1], w_5, b_5, activation_fn='SoftMax', batchnorm=True)
+            l4_b = FC(l3_b, w_4.shape[-1], w_4, b_4, activation_fn='Linear', batchnorm=False)
+            l5_b = FC(l4_b, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False)
+            l6_b = FC(l5_b, w_6.shape[-1], w_6, b_6, activation_fn='Linear', batchnorm=True)
+            l7_b = FC(l6_b, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False)
 
-            # 5-Layers
-            layers = [l1_b, l2_b, l3_b, l4_b, l5_b]
-            test(X, layers)
+            layers_b = [l1_b, l2_b, l3_b, l4_b, l5_b, l6_b, l7_b]
+            test(X, layers_b)
+
+            # Case-3: With Dropout
+            # --------------------
+            # Layer-1
+            dp1 = np.random.rand()
+            l1_c = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', batchnorm=False,
+                      dropout=dp1)
+            mask_l1 = np.array(np.random.rand(batch_size, w_1.shape[-1]) < dp1, dtype=conf.dtype)
+            l1_c.dropout_mask = mask_l1
+
+            # Layer-2
+            dp2 = np.random.rand()
+            l2_c = FC(l1_c, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', batchnorm=True,
+                      dropout=dp2)
+            mask_l2 = np.array(np.random.rand(batch_size, w_2.shape[-1]) < dp2, dtype=conf.dtype)
+            l2_c.dropout_mask = mask_l2
+
+            # Layer-3
+            l3_c = FC(l2_c, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True)
+
+            # Layer-4
+            dp4 = np.random.rand()
+            l4_c = FC(l3_c, w_4.shape[-1], w_4, b_4, activation_fn='Linear', batchnorm=False,
+                      dropout=dp4)
+            mask_l4 = np.array(np.random.rand(batch_size, w_4.shape[-1]) < dp4, dtype=conf.dtype)
+            l4_c.dropout_mask = mask_l4
+
+            # Layer-5
+            l5_c = FC(l4_c, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False)
+
+            # Layer-6
+            dp6 = np.random.rand()
+            l6_c = FC(l5_c, w_6.shape[-1], w_6, b_6, activation_fn='Tanh', batchnorm=True,
+                      dropout=dp6)
+            mask_l6 = np.array(np.random.rand(batch_size, w_6.shape[-1]) < dp6, dtype=conf.dtype)
+            l6_c.dropout_mask = mask_l6
+
+            # Layer-7
+            l7_c = FC(l6_c, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False)
+
+            layers_c = [l1_c, l2_c, l3_c, l4_c, l5_c, l6_c, l7_c]
+            test(X, layers_c)
 
 
 if __name__ == '__main__':
