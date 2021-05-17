@@ -11,7 +11,7 @@ import numpy as np
 from sklearn import datasets
 
 from pydl.nn.layers import FC
-from pydl.nn.layers import NN
+from pydl.nn.nn import NN
 from pydl.training.training import SGD
 from pydl.training.training import Momentum
 from pydl.training.training import RMSprop
