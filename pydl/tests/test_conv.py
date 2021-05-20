@@ -17,13 +17,16 @@ from pydl import conf
 
 class TestConv(unittest.TestCase):
     def test_score_fn(self):
-        def test(inp, w, true_out, pad=0, stride=1, bias=False):
+        def test(inp, w, true_out, bias=False, pad=0, stride=1, rcp_field=None, num_filters=None):
             if true_out is None:
                 with npt.assert_raises(SystemExit):
                     conv = Conv(inp, zero_padding=pad, stride=stride, weights=w, bias=bias)
                     out_volume = conv.score_fn(inp)
             else:
-                conv = Conv(inp, zero_padding=pad, stride=stride, weights=w, bias=bias)
+                conv = Conv(inp, receptive_field=rcp_field, num_filters=num_filters,
+                            zero_padding=pad, stride=stride, weights=w, bias=bias)
+                conv.weights = w
+                conv.bias = bias
                 out_volume = conv.score_fn(inp)
                 npt.assert_almost_equal(out_volume, true_out, decimal=8)
 
@@ -97,7 +100,8 @@ class TestConv(unittest.TestCase):
                          [-4, -7, 0]]], dtype=conf.dtype)
         true_out = np.array([out, out*2])
 
-        test(X, w, true_out+bias.reshape(2, 1, 1), pad=1, stride=2, bias=bias)
+        test(X, w, true_out+bias.reshape(2, 1, 1), bias=bias, pad=1, stride=2, rcp_field=(3, 3),
+             num_filters=2)
 
         # Combinatorial Test Cases
         # ------------------------
@@ -133,7 +137,8 @@ class TestConv(unittest.TestCase):
                 true_out = weighted_sum.transpose(0, 2, 1).reshape(-1, num_k, int(out_height),
                                                                    int(out_width))
 
-            test(X, w, true_out, pad=pad, stride=strd, bias=bias)
+            test(X, w, true_out, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
+                 num_filters=num_k)
 
 
 if __name__ == '__main__':

@@ -79,6 +79,14 @@ class Conv(Layer):
     # Getters
     # -------
     @property
+    def weights(self):
+        return self._weights
+
+    @property
+    def bias(self):
+        return self._bias
+
+    @property
     def shape(self):
         # (None, num_filters, filter_height, filter_width)
         return self._out_shape
@@ -106,6 +114,19 @@ class Conv(Layer):
         return self._stride
 
 
+    # Setters
+    # -------
+    @weights.setter
+    def weights(self, w):
+        assert(w.shape == self._weights.shape)
+        self._weights = w
+
+    @bias.setter
+    def bias(self, b):
+        assert(b.shape == self._bias.shape)
+        self._bias = b
+
+
     def init_weights(self, weights):
         # Initialize Weights
         # Weight Dimension - (num_filters, input_depth, filter_height, filter_width)
@@ -122,7 +143,7 @@ class Conv(Layer):
             # The two innermost dimensions of the weight tensor are filter height (rows) and
             # width (cols) respectively --> Which is same as the dimensions of the receptive field
             if self._receptive_field is not None:
-                assert(weights.shape[1:] == self._receptive_field)
+                assert(weights.shape[2:] == self._receptive_field)
             else:
                 self._receptive_field = weights.shape[2:]
 
@@ -143,7 +164,8 @@ class Conv(Layer):
             self._filter_size = np.prod(self._filter_shape)
 
             # Initialize weights from a normal distribution
-            self._weights = np.random.randn(self._num_filters, self._filter_shape) * weight_scale
+            self._weights = np.random.randn(self._num_filters, *self._filter_shape) * \
+                            self._weight_scale
 
             if self._xavier:
                 # Apply Xavier Initialization
