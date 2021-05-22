@@ -66,7 +66,7 @@ class Conv(Layer):
             self._bias = None
 
         if batchnorm:
-            self._batchnorm = BatchNorm(feature_size=self._num_neurons)
+            self._batchnorm = BatchNorm(feature_size=self._out_shape[1:])
         else:
             self._batchnorm = None
 
@@ -88,8 +88,13 @@ class Conv(Layer):
 
     @property
     def shape(self):
-        # (None, num_filters, filter_height, filter_width)
+        # (None, num_filters, output_height, output_width)
         return self._out_shape
+
+    @property
+    def size(self):
+        # (num_filters x output_height x output_width)
+        return self._out_size
 
     @property
     def receptive_field(self):
@@ -218,6 +223,7 @@ class Conv(Layer):
             sys.exit("Error: Kernal size is greater than input size.")
         else:
             self._out_shape = tuple((None, self._num_filters, int(o_h), int(o_w)))
+            self._out_size = np.prod(self._out_shape[1:])
 
 
     def calculate_unroll_indices(self): # Conv-Algo-4
