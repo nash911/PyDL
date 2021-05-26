@@ -64,16 +64,8 @@ class Layer(ABC):
         return self._name
 
     @property
-    def shape(self):
-        return (None, self._num_neurons)
-
-    @property
-    def size(self):
-        return self._weights.size
-
-    @property
-    def num_neurons(self):
-        return self._num_neurons
+    def type(self):
+        return self._type
 
     @property
     def activation(self):
@@ -128,7 +120,11 @@ class Layer(ABC):
         warnings.warn("\nWARNING! Setting dropout_mask for a layer. Preset dropout mask should " +
                       "only be used for gradient checking in test mode. If training, undo this!")
         if d_mask is not None:
-            assert(d_mask.shape[-1] == self.num_neurons)
+            if self.type == 'FC_Layer':
+                assert(d_mask.shape[-1] == self.num_neurons)
+            elif self.type == 'Convolution_Layer':
+                assert(d_mask.shape[1:] == self.shape[1:])
+
         self._dropout_mask = d_mask
 
     # Abstract Methods
@@ -141,6 +137,9 @@ class Layer(ABC):
     def backward(self, inp_grad):
         pass
 
+    @abstractmethod
+    def update_weights(self, alpha):
+        pass
 
 class FC(Layer):
     """The Hidden Layer Class
@@ -149,6 +148,7 @@ class FC(Layer):
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_scale=1.0,
                  xavier=True, activation_fn='Sigmoid', batchnorm=False, dropout=None, name=None):
         super().__init__(name=name)
+        self._type = 'FC_Layer'
         self._inp_size = inputs.shape[-1]
         self._num_neurons = num_neurons
         self._weight_scale = weight_scale
@@ -188,6 +188,21 @@ class FC(Layer):
             self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
         else:
             self._dropout = None
+
+
+    # Getters
+    # -------
+    @property
+    def shape(self):
+        return (None, self._num_neurons)
+
+    @property
+    def size(self):
+        return self._weights.size
+
+    @property
+    def num_neurons(self):
+        return self._num_neurons
 
 
     def reinitialize_weights(self, inputs=None, num_neurons=None):

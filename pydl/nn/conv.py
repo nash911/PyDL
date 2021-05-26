@@ -37,6 +37,7 @@ class Conv(Layer):
                  weights=None, bias=True, weight_scale=1.0, xavier=True, activation_fn='ReLU',
                  batchnorm=False, dropout=None, name='ConvLayer'):
         super().__init__(name=name)
+        self._type = 'Convolution_Layer'
         self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
         self._receptive_field = receptive_field # Filter's (height, width)
         self._num_filters = num_filters
@@ -255,17 +256,15 @@ class Conv(Layer):
 
 
     def score_fn(self, inputs, weights=None):
-        self._inputs = inputs
-
         # Zero-pad input volume based on the setting
         if self._zero_padding > 0:
             pad = self._zero_padding
-            padded_inputs = np.pad(self._inputs, ((0,0),(0,0),(pad,pad),(pad,pad)), 'constant')
+            padded_inputs = np.pad(inputs, ((0,0),(0,0),(pad,pad),(pad,pad)), 'constant')
         else:
-            padded_inputs = self._inputs
+            padded_inputs = inputs
 
         # Unroll input volume to shape: (batch, out_rows*out_cols, filter_size[dxhxw])
-        unrolled_inp = padded_inputs[:, self._slice_inds, self._row_inds, self._col_inds]
+        self._unrolled_inputs = padded_inputs[:, self._slice_inds, self._row_inds, self._col_inds]
 
         # Unroll filter weights to shape: (num_filters, filter_size[dxhxw])
         if weights is None:
@@ -274,7 +273,7 @@ class Conv(Layer):
             weights_reshaped = weights.reshape(self._num_filters, -1)
 
         # Weighted sum of each receptive field with every filter
-        weighted_sum = np.matmul(unrolled_inp, weights_reshaped.T)
+        weighted_sum = np.matmul(self._unrolled_inputs, weights_reshaped.T)
 
         # Add the bias term§
         if self._has_bias:
@@ -289,13 +288,18 @@ class Conv(Layer):
 
     def weight_gradients(self, inp_grad, reg_lambda=0, inputs=None, summed=True):
         if inputs is not None:
-            self._inputs = inputs
-        assert(self._inputs is not None)
+            self._unrolled_inputs = inputs
+        assert(self._unrolled_inputs is not None)
+
+        batch = inp_grad.shape[0]
 
         # dy/dw: Gradient of the layer activation 'y' w.r.t the weights 'w'
-        grad = self._inputs[:,:,np.newaxis] * inp_grad[:,np.newaxis,:]
+        grad = self._unrolled_inputs[:,np.newaxis,:,:] * \
+               inp_grad.reshape(batch, self._num_filters, -1, 1)
+
         if summed:
-            grad = np.sum(grad, axis=0, keepdims=False)
+            grad = np.sum(grad, axis=(0,2), keepdims=False)
+            grad = grad.reshape(self._num_filters, *self._filter_shape)
 
         if reg_lambda > 0:
             grad += (reg_lambda * self._weights)
@@ -309,21 +313,71 @@ class Conv(Layer):
             # dy/db: Gradient of the layer activation 'y' w.r.t the bias 'b'
             grad = inp_grad
             if summed:
-                grad = np.sum(grad, axis=0, keepdims=False)
+                grad = np.sum(grad, axis=(0,2,3), keepdims=False)
             return grad
 
 
     def input_gradients(self, inp_grad, summed=True):
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
-        grad = self._weights[np.newaxis,:,:] * inp_grad[:,np.newaxis,:]
-        if summed:
-            grad = np.sum(grad, axis=-1, keepdims=False)
-        return grad
+        r0 = self._row_inds.shape[0]
+        r1 = self._row_inds.shape[1]
+
+        out_h = self._out_shape[2]
+        out_w = self._out_shape[3]
+
+        ker_h = self._receptive_field[0]
+        ker_w = self._receptive_field[1]
+
+        # Distribute weights to shape: (num_k, num_field, inp_d, pad_inp_h, pad_inp_w)
+        field_w_dim = np.repeat(np.arange(r0), r1).reshape(out_h*out_w, -1)
+        field_w_dim = np.tile(field_w_dim, reps=(self._num_filters, 1, 1))
+
+        ker_w_dim = np.ones_like(field_w_dim) * np.arange(self._num_filters).reshape(-1, 1, 1)
+
+        s_w_dims = np.tile(self._slice_inds, reps=(self._num_filters, 1, 1))
+        r_w_dims = np.tile(self._row_inds, reps=(self._num_filters, 1, 1))
+        c_w_dims = np.tile(self._col_inds, reps=(self._num_filters, 1, 1))
+
+        inp_d = self._inp_shape[0]
+        padded_inp_h = self._inp_shape[1] + (2*self._zero_padding)
+        padded_inp_w = self._inp_shape[2] + (2*self._zero_padding)
+
+        w_grads_dist = np.zeros((self._num_filters, out_h*out_w, inp_d, padded_inp_h, padded_inp_w))
+        w_grads_dist[ker_w_dim, field_w_dim, s_w_dims, r_w_dims, c_w_dims] = \
+            self._weights.reshape(self._num_filters, 1, -1)
+
+        # Distribute Incoming gradients
+        batch_size = inp_grad.shape[0]
+        field_i_dim = np.repeat(np.arange(r0), r1).reshape(out_h*out_w, -1)
+        field_i_dim = np.tile(field_i_dim, reps=(batch_size, self._num_filters, 1, 1))
+
+        ker_i_dim = np.ones_like(field_w_dim) * np.arange(self._num_filters).reshape(-1, 1, 1)
+        ker_i_dim = np.tile(ker_i_dim, reps=(batch_size, 1, 1, 1))
+
+        s_i_dims = np.tile(self._slice_inds, reps=(batch_size, self._num_filters, 1, 1))
+        r_i_dims = np.tile(self._row_inds, reps=(batch_size, self._num_filters, 1, 1))
+        c_i_dims = np.tile(self._col_inds, reps=(batch_size, self._num_filters, 1, 1))
+
+        batch_dim = np.ones_like(s_i_dims) * np.arange(batch_size).reshape(-1, 1, 1, 1)
+
+        i_grad_dist = np.zeros((batch_size, self._num_filters, out_h*out_w, inp_d,
+                                padded_inp_h, padded_inp_w))
+        i_grad_dist[batch_dim, ker_i_dim, field_i_dim, s_i_dims, r_i_dims, c_i_dims] = \
+            np.tile(inp_grad.reshape(batch_size, self._num_filters, out_h*out_w, 1),
+                    reps=(1, 1, 1, inp_d*ker_h*ker_w))
+
+        out_grads = w_grads_dist * i_grad_dist
+        # out_grads = np.sum(np.sum(out_grads, axis=1), axis=1)
+        out_grads = np.sum(out_grads, axis=(1,2))
+
+        if self._zero_padding > 0:
+            pad = self._zero_padding
+            out_grads = out_grads[:,:,pad:-pad,pad:-pad]
+
+        return out_grads
 
 
     def forward(self, inputs, inference=False, mask=None):
-        self._inputs = inputs
-
         # Sum of weighted inputs
         z = self.score_fn(inputs)
 
