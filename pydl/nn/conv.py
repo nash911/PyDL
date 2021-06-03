@@ -404,6 +404,12 @@ class Conv(Layer):
 
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
+        if len(inp_grad.shape) > 2: # The proceeding layer is a Convolution/Pooling layer
+            pass
+        else: # The proceeding layer is a FC layer
+            # Reshape incoming gradients accordingly
+            inp_grad = inp_grad.reshape(-1, *self._out_shape[1:])
+
         if self._dropout is not None:
             drop_grad = self._dropout.backward(inp_grad)
         else:

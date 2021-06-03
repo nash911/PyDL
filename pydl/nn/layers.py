@@ -149,7 +149,7 @@ class FC(Layer):
                  xavier=True, activation_fn='Sigmoid', batchnorm=False, dropout=None, name=None):
         super().__init__(name=name)
         self._type = 'FC_Layer'
-        self._inp_size = inputs.shape[-1]
+        self._inp_size = np.prod(inputs.shape[1:])
         self._num_neurons = num_neurons
         self._weight_scale = weight_scale
         self._xavier = xavier
@@ -274,10 +274,15 @@ class FC(Layer):
         return grad
 
     def forward(self, inputs, inference=False, mask=None):
-        self._inputs = inputs
+        if len(inputs.shape) > 2: # The preceeding layer is a Convolution/Pooling layer or 3D inputs
+            # Unroll inputs
+            batch_size = inputs.shape[0]
+            self._inputs = inputs.reshape(batch_size, -1)
+        else: # The preceeding layer is a FC layer or 1D inputs
+            self._inputs = inputs
 
         # Sum of weighted inputs
-        z = self.score_fn(inputs)
+        z = self.score_fn(self._inputs)
 
         # Batchnorm
         if self._batchnorm is not None:
