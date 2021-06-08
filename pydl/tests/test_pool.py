@@ -146,7 +146,7 @@ class TestPool(unittest.TestCase):
 
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
-        def test(inp, unit_inp_grad, stride, rcp_field=None):
+        def test(inp, unit_inp_grad, stride=None, rcp_field=None):
             pool = Pool(inp, receptive_field=rcp_field, stride=stride)
             y = pool.forward(inp)
             inp_grad = np.ones_like(y, dtype=conf.dtype) if unit_inp_grad \
@@ -194,7 +194,7 @@ class TestPool(unittest.TestCase):
 
             if (strd_r < k_h or strd_c < k_w):
                 pass_counter += 1
-                continue
+                test(X, unit_inp_grad=(True if unit else False), rcp_field=(k_h,k_w))
             else:
                 test_counter += 1
                 test(X, unit_inp_grad=(True if unit else False), stride=(strd_r,strd_c),

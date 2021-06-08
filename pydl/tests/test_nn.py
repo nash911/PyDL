@@ -704,6 +704,7 @@ class TestNN(unittest.TestCase):
             nn_out = nn.forward(inp)
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
             inputs_grad = nn.backward(inp_grad)
+            nn.update_weights(1e-4)
 
         for _ in range(1):
             # Inputs
@@ -799,7 +800,6 @@ class TestNN(unittest.TestCase):
 
             layers = [l1, l2, l3, l4, l5, l6, l7, l8]
             nn = NN(X, layers)
-            # iterations = 1000
 
             for _ in range(100):
                 X = np.random.uniform(-1, 1, (batch_size, depth, num_rows, num_cols))

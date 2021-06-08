@@ -19,7 +19,8 @@ class Pool(Layer):
     """The Pooling Layer Class
     """
 
-    def __init__(self, inputs, receptive_field=None, padding='SAME', stride=1, name='Pooling_Layer'):
+    def __init__(self, inputs, receptive_field=None, padding='SAME', stride=None,
+                 name='Pooling_Layer'):
         super().__init__(name=name)
         self._type = 'Pooling_Layer'
         self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
@@ -40,7 +41,10 @@ class Pool(Layer):
         self._receptive_field = tuple((r_field_height, r_field_width))
 
         # Set stride rows and columns
-        if type(stride) is int:
+        if stride is None:
+            stride_r = r_field_height
+            stride_c = r_field_width
+        elif type(stride) is int:
             stride_r = stride_c = stride
         elif type(stride) is tuple:
             stride_r = stride[0]
@@ -193,6 +197,42 @@ class Pool(Layer):
                 out_grads = out_grads[:,:,:,pad_c[0]:-pad_c[1]]
 
         return out_grads
+
+
+    # def input_gradients(self, inp_grad, summed=True):
+    #     # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
+    #     batch_size = inp_grad.shape[0]
+    #     inp_dep = self._inp_shape[0]
+    #
+    #     r = np.arange(self._pooling_mask.size)%(np.prod(inp_grad.shape[2:]))
+    #     row = self._row_inds[r, self._pooling_mask]
+    #     col = self._col_inds[r, self._pooling_mask]
+    #
+    #     if self._padding is None:
+    #         out_grad_shape = tuple((batch_size, *self._inp_shape))
+    #     else:
+    #         out_grad_rows_cols = np.array(self._inp_shape[1:]) + np.sum(np.array(self._padding),
+    #                                                                     axis=-1)
+    #         out_grad_shape = tuple((batch_size, inp_dep, *out_grad_rows_cols))
+    #     out_grads = np.zeros(out_grad_shape)
+    #
+    #     batch = np.repeat(np.arange(batch_size), np.prod(inp_grad.shape[1:]))
+    #     dep = np.tile(np.repeat(np.arange(inp_dep), np.prod(inp_grad.shape[2:])), batch_size)
+    #
+    #     out_grads[batch, dep, row, col] = inp_grad.reshape(-1)
+    #
+    #
+    #     if self._padding is not None:
+    #         pad_r = self._padding[0]
+    #         pad_c = self._padding[1]
+    #
+    #         if np.sum(pad_r) > 0:
+    #             out_grads = out_grads[:,:,pad_r[0]:-pad_r[1],:]
+    #
+    #         if np.sum(pad_c) > 0:
+    #             out_grads = out_grads[:,:,:,pad_c[0]:-pad_c[1]]
+    #
+    #     return out_grads
 
 
     def forward(self, inputs, inference=None):
