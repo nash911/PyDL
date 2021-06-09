@@ -139,19 +139,19 @@ class Pool(Layer):
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
 
-        num_row_windows = inp_h - (ker_h-1) + (0 if self._padding is None else
+        window_row_inds = inp_h - (ker_h-1) + (0 if self._padding is None else
                                                np.sum(self._padding[0]))
-        num_col_windows = inp_w - (ker_w-1) + (0 if self._padding is None else
+        window_col_inds = inp_w - (ker_w-1) + (0 if self._padding is None else
                                                np.sum(self._padding[1]))
 
         out_h = self._out_shape[2]
         out_w = self._out_shape[3]
 
         r0 = np.repeat(np.arange(ker_h), ker_w)
-        r1 = np.repeat(np.arange(num_row_windows, step=self._stride[0]), out_w)
+        r1 = np.repeat(np.arange(window_row_inds, step=self._stride[0]), out_w)
 
         c0 = np.tile(np.arange(ker_w), ker_h)
-        c1 = np.tile(np.arange(num_col_windows, step=self._stride[1]), out_h)
+        c1 = np.tile(np.arange(window_col_inds, step=self._stride[1]), out_h)
 
         r = r1.reshape(-1,1) + r0.reshape(1,-1)
         c = c1.reshape(-1,1) + c0.reshape(1,-1)

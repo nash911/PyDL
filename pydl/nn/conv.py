@@ -182,7 +182,7 @@ class Conv(Layer):
                 self._weights /= norm_fctr
 
 
-    def reinitialize_weights(self, inputs=None, num_neurons=None):
+    def reinitialize_weights(self):
         # Initialize weights from a normal distribution
         self._weights = np.random.randn(self._num_filters, self._filter_shape) * self._weight_scale
 
@@ -198,7 +198,7 @@ class Conv(Layer):
             self._bias = np.zeros(self._num_filters, dtype=conf.dtype)
 
         if self._batchnorm is not None:
-            self._batchnorm.reinitialize_params(feature_size=num_neurons)
+            self._batchnorm.reinitialize_params(feature_size=self._out_shape[1:])
 
 
     def set_output_volume_shape(self):
@@ -234,17 +234,17 @@ class Conv(Layer):
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
 
-        sliding_rows = inp_h - (ker_h-1) + (2*self._zero_padding)
-        sliding_cols = inp_w - (ker_w-1) + (2*self._zero_padding)
+        window_row_inds = inp_h - (ker_h-1) + (2*self._zero_padding)
+        window_col_inds = inp_w - (ker_w-1) + (2*self._zero_padding)
 
         out_h = int((inp_h - ker_h + (2*self._zero_padding)) / self._stride) + 1
         out_w = int((inp_w - ker_w + (2*self._zero_padding)) / self._stride) + 1
 
         r0 = np.repeat(np.arange(ker_h), ker_w)
-        r1 = np.repeat(np.arange(sliding_rows, step=self._stride), out_w)
+        r1 = np.repeat(np.arange(window_row_inds, step=self._stride), out_w)
 
         c0 = np.tile(np.arange(ker_w), ker_h)
-        c1 = np.tile(np.arange(sliding_cols, step=self._stride), out_h)
+        c1 = np.tile(np.arange(window_col_inds, step=self._stride), out_h)
 
         r = r1.reshape(-1,1) + r0.reshape(1,-1)
         c = c1.reshape(-1,1) + c0.reshape(1,-1)
