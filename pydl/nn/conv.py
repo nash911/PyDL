@@ -60,9 +60,9 @@ class Conv(Layer):
         # Initialize Bias
         if type(bias) == np.ndarray:
             assert(bias.size == self._num_filters)
-            self._bias = bias
+            self._bias = bias.reshape(-1, 1)
         elif bias:
-            self._bias = np.zeros(self._num_filters, dtype=conf.dtype)
+            self._bias = np.zeros((self._num_filters, 1), dtype=conf.dtype)
         else:
             self._bias = None
 
@@ -129,8 +129,12 @@ class Conv(Layer):
 
     @bias.setter
     def bias(self, b):
-        assert(b.shape == self._bias.shape)
-        self._bias = b
+        try:
+            assert(b.shape == self._bias.shape)
+            self._bias = b
+        except:
+            assert(b.size == self._bias.size)
+            self._bias = b.reshape(-1, 1)
 
 
     def init_weights(self, weights):
@@ -195,7 +199,7 @@ class Conv(Layer):
             self._weights /= norm_fctr
 
         if self._has_bias:
-            self._bias = np.zeros(self._num_filters, dtype=conf.dtype)
+            self._bias = np.zeros((self._num_filters, 1), dtype=conf.dtype)
 
         if self._batchnorm is not None:
             self._batchnorm.reinitialize_params(feature_size=self._out_shape[1:])
@@ -227,7 +231,7 @@ class Conv(Layer):
             self._out_size = np.prod(self._out_shape[1:])
 
 
-    def calculate_unroll_indices(self): # Conv-Algo-4
+    def calculate_unroll_indices(self): # Conv-Algo-5
         inp_d = self._inp_shape[0]
         inp_h = self._inp_shape[1]
         inp_w = self._inp_shape[2]
@@ -246,13 +250,13 @@ class Conv(Layer):
         c0 = np.tile(np.arange(ker_w), ker_h)
         c1 = np.tile(np.arange(window_col_inds, step=self._stride), out_h)
 
-        r = r1.reshape(-1,1) + r0.reshape(1,-1)
-        c = c1.reshape(-1,1) + c0.reshape(1,-1)
+        r = r0.reshape(-1,1) + r1.reshape(1,-1)
+        c = c0.reshape(-1,1) + c1.reshape(1,-1)
 
-        self._row_inds = np.tile(r, inp_d)
-        self._col_inds = np.tile(c, inp_d)
+        self._row_inds = np.tile(r, reps=(inp_d, 1))
+        self._col_inds = np.tile(c, reps=(inp_d, 1))
 
-        self._slice_inds = np.tile(np.repeat(np.arange(inp_d), ker_h*ker_w), reps=(out_h*out_w, 1))
+        self._slice_inds = np.tile(np.repeat(np.arange(inp_d), ker_h*ker_w), reps=(out_h*out_w, 1)).T
 
 
     def score_fn(self, inputs, weights=None):
@@ -273,15 +277,14 @@ class Conv(Layer):
             weights_reshaped = weights.reshape(self._num_filters, -1)
 
         # Weighted sum of each receptive field with every filter
-        weighted_sum = np.matmul(self._unrolled_inputs, weights_reshaped.T)
+        weighted_sum = np.matmul(weights_reshaped, self._unrolled_inputs)
 
-        # Add the bias term§
+        # Add the bias term
         if self._has_bias:
             weighted_sum += self._bias
 
         # Reshape output to it's correct volumetric shape: (batch, out_depth, out_height, out_width)
-        # This reshaping needs transposing the two innermost dimensions of the weighted sum
-        weighted_sum_reshaped = weighted_sum.transpose(0, 2, 1).reshape(-1, *self._out_shape[1:])
+        weighted_sum_reshaped = weighted_sum.reshape(-1, *self._out_shape[1:])
 
         return weighted_sum_reshaped
 
@@ -295,10 +298,10 @@ class Conv(Layer):
 
         # dy/dw: Gradient of the layer activation 'y' w.r.t the weights 'w'
         grad = self._unrolled_inputs[:,np.newaxis,:,:] * \
-               inp_grad.reshape(batch, self._num_filters, -1, 1)
+               inp_grad.reshape(batch, self._num_filters, 1, -1)
 
         if summed:
-            grad = np.sum(grad, axis=(0,2), keepdims=False)
+            grad = np.sum(grad, axis=(0,3), keepdims=False)
             grad = grad.reshape(self._num_filters, *self._filter_shape)
 
         if reg_lambda > 0:
@@ -313,62 +316,26 @@ class Conv(Layer):
             # dy/db: Gradient of the layer activation 'y' w.r.t the bias 'b'
             grad = inp_grad
             if summed:
-                grad = np.sum(grad, axis=(0,2,3), keepdims=False)
+                grad = np.sum(grad, axis=(0,2,3), keepdims=False).reshape(-1, 1)
             return grad
 
 
-    def input_gradients(self, inp_grad, summed=True):
+    def input_gradients(self, inp_grad, summed=True):  # Conv-Bck-Algo-4
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
-        r0 = self._row_inds.shape[0]
-        r1 = self._row_inds.shape[1]
-
-        out_h = self._out_shape[2]
-        out_w = self._out_shape[3]
-
-        ker_h = self._receptive_field[0]
-        ker_w = self._receptive_field[1]
-
-        # Distribute weights to shape: (num_k, num_field, inp_d, pad_inp_h, pad_inp_w)
-        field_w_dim = np.repeat(np.arange(r0), r1).reshape(out_h*out_w, -1)
-        field_w_dim = np.tile(field_w_dim, reps=(self._num_filters, 1, 1))
-
-        ker_w_dim = np.ones_like(field_w_dim) * np.arange(self._num_filters).reshape(-1, 1, 1)
-
-        s_w_dims = np.tile(self._slice_inds, reps=(self._num_filters, 1, 1))
-        r_w_dims = np.tile(self._row_inds, reps=(self._num_filters, 1, 1))
-        c_w_dims = np.tile(self._col_inds, reps=(self._num_filters, 1, 1))
-
+        batch_size = inp_grad.shape[0]
         inp_d = self._inp_shape[0]
         padded_inp_h = self._inp_shape[1] + (2*self._zero_padding)
         padded_inp_w = self._inp_shape[2] + (2*self._zero_padding)
 
-        w_grads_dist = np.zeros((self._num_filters, out_h*out_w, inp_d, padded_inp_h, padded_inp_w))
-        w_grads_dist[ker_w_dim, field_w_dim, s_w_dims, r_w_dims, c_w_dims] = \
-            self._weights.reshape(self._num_filters, 1, -1)
+        # weight * inp_grads
+        w_inp_grad = self._weights.reshape(self._num_filters, -1, 1) * \
+                     inp_grad.reshape(batch_size, self._num_filters, 1, -1)
+        w_inp_grad = np.sum(w_inp_grad, axis=1, keepdims=False)
 
-        # Distribute Incoming gradients
-        batch_size = inp_grad.shape[0]
-        field_i_dim = np.repeat(np.arange(r0), r1).reshape(out_h*out_w, -1)
-        field_i_dim = np.tile(field_i_dim, reps=(batch_size, self._num_filters, 1, 1))
-
-        ker_i_dim = np.ones_like(field_w_dim) * np.arange(self._num_filters).reshape(-1, 1, 1)
-        ker_i_dim = np.tile(ker_i_dim, reps=(batch_size, 1, 1, 1))
-
-        s_i_dims = np.tile(self._slice_inds, reps=(batch_size, self._num_filters, 1, 1))
-        r_i_dims = np.tile(self._row_inds, reps=(batch_size, self._num_filters, 1, 1))
-        c_i_dims = np.tile(self._col_inds, reps=(batch_size, self._num_filters, 1, 1))
-
-        batch_dim = np.ones_like(s_i_dims) * np.arange(batch_size).reshape(-1, 1, 1, 1)
-
-        i_grad_dist = np.zeros((batch_size, self._num_filters, out_h*out_w, inp_d,
-                                padded_inp_h, padded_inp_w))
-        i_grad_dist[batch_dim, ker_i_dim, field_i_dim, s_i_dims, r_i_dims, c_i_dims] = \
-            np.tile(inp_grad.reshape(batch_size, self._num_filters, out_h*out_w, 1),
-                    reps=(1, 1, 1, inp_d*ker_h*ker_w))
-
-        out_grads = w_grads_dist * i_grad_dist
-        # out_grads = np.sum(np.sum(out_grads, axis=1), axis=1)
-        out_grads = np.sum(out_grads, axis=(1,2))
+        batch_inds = np.arange(batch_size).reshape(-1, 1, 1)
+        out_grads = np.zeros((batch_size, inp_d, padded_inp_h, padded_inp_w))
+        np.add.at(out_grads, [batch_inds, self._slice_inds, self._row_inds, self._col_inds],
+                  w_inp_grad)
 
         if self._zero_padding > 0:
             pad = self._zero_padding
