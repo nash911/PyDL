@@ -353,21 +353,21 @@ class Conv(Layer):
             z = self._batchnorm.forward(z)
 
         # Nonlinearity Activation
-        self._output = self._activation_fn.forward(z)
+        output = self._activation_fn.forward(z)
 
         # Dropout
         if self._dropout is not None:
             if not inference: # Training step
                 # Apply Dropout Mask
-                self._output = self._dropout.forward(self._output, mask if self.dropout_mask is None
+                output = self._dropout.forward(output, mask if self.dropout_mask is None
                                                      else self.dropout_mask)
             else: # Inference
                  if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
-                     self._output *= self.dropout.p
+                     output *= self.dropout.p
                  else: # Activation Fn. ∈ {'Linear', 'ReLU'}
                      pass # Do nothing - Inverse Dropout
 
-        return self._output
+        return output
 
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
@@ -394,8 +394,8 @@ class Conv(Layer):
         if self._has_bias:
             self._bias_grad = self.bias_gradients(batch_grad)
 
-        self._out_grad = self.input_gradients(batch_grad)
-        return self._out_grad
+        out_grad = self.input_gradients(batch_grad)
+        return out_grad
 
 
     def update_weights(self, alpha):

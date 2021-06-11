@@ -203,7 +203,8 @@ class Training(ABC):
             nn_weights = self._nn.weights
             regularization_loss = 0
             for w in nn_weights:
-                regularization_loss += np.sum(w * w)
+                if w is not None:
+                    regularization_loss += np.sum(w * w)
             regularization_loss *= (0.5 * self._lambda)
         else:
             regularization_loss = 0
@@ -240,7 +241,8 @@ class Training(ABC):
             nn_weights = self._nn.weights
             regularization_loss = 0
             for w in nn_weights:
-                regularization_loss += np.sum(w * w)
+                if w is not None:
+                    regularization_loss += np.sum(w * w)
             regularization_loss *= (0.5 * self._lambda)
         else:
             regularization_loss = 0
@@ -302,7 +304,8 @@ class Training(ABC):
             nn_weights = self._nn.weights
             regularization_loss = 0
             for w in nn_weights:
-                regularization_loss += np.sum(w * w)
+                if w is not None:
+                    regularization_loss += np.sum(w * w)
             regularization_loss *= (0.5 * self._lambda)
         else:
             regularization_loss = 0

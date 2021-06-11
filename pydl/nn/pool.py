@@ -268,10 +268,10 @@ class Pool(Layer):
             # Reshape incoming gradients accordingly
             inp_grad = inp_grad.reshape(-1, *self._out_shape[1:])
 
-        self._out_grad = self.input_gradients(inp_grad)
+        out_grad = self.input_gradients(inp_grad)
         self._pooling_mask = None
 
-        return self._out_grad
+        return out_grad
 
 
     def update_weights(self, alpha):
