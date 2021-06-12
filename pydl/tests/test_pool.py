@@ -167,7 +167,8 @@ class TestPool(unittest.TestCase):
                             inputs_finite_diff[i,j,k,l] = np.sum(((lhs-rhs) / (2*self.delta)) *
                                                                  inp_grad, keepdims=False)
 
-            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
+            npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=6)
+            assert not np.isinf(inputs_grad).any()
 
 
         # Combinatorial Test Cases
@@ -183,24 +184,14 @@ class TestPool(unittest.TestCase):
         unit_inp_grad = [False]
         scale = [1e-0]
 
-        pass_counter = 0
-        test_counter = 0
-
         for batch, dep, inp_h, inp_w, k_h, k_w, strd_r, strd_c, unit, scl in \
             list(itertools.product(batch_size, inp_depth, inp_height, inp_width, kernal_height,
                                    kernal_width, stride_r, stride_c, unit_inp_grad, scale)):
 
             X = np.random.uniform(-scl, scl, (batch, dep, inp_h, inp_w))
 
-            if (strd_r < k_h or strd_c < k_w):
-                pass_counter += 1
-                test(X, unit_inp_grad=(True if unit else False), rcp_field=(k_h,k_w))
-            else:
-                test_counter += 1
-                test(X, unit_inp_grad=(True if unit else False), stride=(strd_r,strd_c),
-                     rcp_field=(k_h,k_w))
-
-        print("pass_counter: %d --  test_counter: %d" % (pass_counter, test_counter))
+            test(X, unit_inp_grad=(True if unit else False), stride=(strd_r,strd_c),
+                 rcp_field=(k_h,k_w))
 
 
 if __name__ == '__main__':
