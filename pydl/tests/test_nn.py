@@ -708,8 +708,8 @@ class TestNN(unittest.TestCase):
 
         for _ in range(1):
             # Inputs
-            batch_size = 8
-            depth = 3
+            batch_size = 64
+            depth = 8
             num_rows = 32
             num_cols = 32
             X = np.empty((batch_size, depth, num_rows, num_cols))
@@ -718,7 +718,7 @@ class TestNN(unittest.TestCase):
             # ------
             # NN Architecture
             # Layer 1 - Convolution
-            num_kernals_1 = 6
+            num_kernals_1 = 16
             rec_h_1 = 5
             rec_w_1 = 5
             pad_1 = 0
@@ -733,7 +733,7 @@ class TestNN(unittest.TestCase):
             l1.dropout_mask = mask_l1
 
             # Layer 2 - Convolution
-            num_kernals_2 = 5
+            num_kernals_2 = 16
             rec_h_2 = 3
             rec_w_2 = 3
             pad_2 = 0
@@ -754,7 +754,7 @@ class TestNN(unittest.TestCase):
             l3 = Pool(l2, receptive_field=(rec_h_3, rec_w_3), stride=stride_3, name='MaxPool-3')
 
             # Layer 4 - Convolution
-            num_kernals_4 = 3
+            num_kernals_4 = 8
             rec_h_4 = 1
             rec_w_4 = 1
             pad_4 = 0
