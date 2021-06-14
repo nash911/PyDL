@@ -335,9 +335,39 @@ class Training(ABC):
         self._class_prob = None
         return loss_grad / y.shape[0]
 
+    def batch_loss(self, X, y, batch_size=None, inference=True):
+        if batch_size is None:
+            batch_size = X.shape[0]
+        num_batches = int(np.ceil(X.shape[0]/batch_size))
 
-    def evaluate(self, X, y, inference=True):
-        test_prob = self._nn.forward(X, inference)
+        batch_l = list()
+        for i in range(num_batches):
+            start = int(batch_size * i)
+            if i == num_batches-1:
+                end = X.shape[0]
+            else:
+                end = start + batch_size
+            batch_l.append(self.loss(X[start:end], y[start:end], inference))
+
+        return np.mean(batch_l)
+
+
+    def evaluate(self, X, y, batch_size=None, inference=True):
+        if batch_size is None:
+            batch_size = X.shape[0]
+        num_batches = int(np.ceil(X.shape[0]/batch_size))
+
+        test_prob = list()
+        for i in range(num_batches):
+            start = int(batch_size * i)
+            if i == num_batches-1:
+                end = X.shape[0]
+            else:
+                end = start + batch_size
+            test_prob.append(self._nn.forward(X[start:end], inference))
+
+        test_prob = np.vstack(test_prob)
+
         if self._binary_classification:
             pred = np.array(test_prob >= 1-test_prob, dtype=np.int32)
         else:
@@ -353,16 +383,16 @@ class Training(ABC):
         return accuracy
 
 
-    def print_log(self, epoch, plot, fig, axs, train_l, epochs_list, train_loss, test_loss,
-                  train_accuracy, test_accuracy):
-        test_l = self.loss(self._test_X, self._test_y, inference=True)
+    def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
+                  test_loss, train_accuracy, test_accuracy):
+        test_l = self.batch_loss(self._test_X, self._test_y, batch_size, inference=True)
         if self._regression:
-            train_l = self.loss(self._train_X, self._train_y, inference=True)
+            train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=True)
             train_accur = np.sqrt(train_l)
             test_accur = np.sqrt(test_l)
         else: # Classification
-            train_accur = self.evaluate(self._train_X, self._train_y, inference=True)
-            test_accur = self.evaluate(self._test_X, self._test_y, inference=True)
+            train_accur = self.evaluate(self._train_X, self._train_y, batch_size, inference=True)
+            test_accur = self.evaluate(self._test_X, self._test_y, batch_size, inference=True)
 
         # Store training logs
         epochs_list.append(epoch)
@@ -439,9 +469,9 @@ class Training(ABC):
         test_accuracy = list()
         num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
 
-        init_train_l = self.loss(self._train_X, self._train_y, inference=False)
-        self.print_log(0, plot, fig, axs, init_train_l, epochs_list, train_loss, test_loss,
-                       train_accuracy, test_accuracy)
+        init_train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=False)
+        self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
+                       test_loss, train_accuracy, test_accuracy)
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -458,8 +488,8 @@ class Training(ABC):
                 self.update_network(e+1)
 
             if (e+1) % log_freq == 0:
-                self.print_log(e+1, plot, fig, axs, train_l, epochs_list, train_loss, test_loss,
-                               train_accuracy, test_accuracy)
+                self.print_log(e+1, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
+                               test_loss, train_accuracy, test_accuracy)
 
         training_logs_dict = OrderedDict()
         training_logs_dict['epochs'] = epochs_list
@@ -494,9 +524,10 @@ class SGD(Training):
 
     def update_network(self, t=None):
         for l in self._nn.layers:
-            l.weights += -self._step_size * l.weights_grad
-            if l.bias is not None:
-                l.bias += -self._step_size * l.bias_grad
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                l.weights += -self._step_size * l.weights_grad
+                if l.bias is not None:
+                    l.bias += -self._step_size * l.bias_grad
 
 
 class Momentum(Training):
@@ -516,8 +547,11 @@ class Momentum(Training):
 
         # Initialize momentum velocities to zero
         for l in self._nn.layers:
-            v = {'w': np.zeros_like(l.weights),
-                 'b': np.zeros_like(l.bias)}
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                v = {'w': np.zeros_like(l.weights),
+                     'b': np.zeros_like(l.bias)}
+            else:
+                v = None
             self._vel.append(v)
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
@@ -527,11 +561,12 @@ class Momentum(Training):
 
     def update_network(self, t=None):
         for l, v in zip(self._nn.layers, self._vel):
-            v['w'] = (v['w'] * self._mu) - (self._step_size * l.weights_grad)
-            v['b'] = (v['b'] * self._mu) - (self._step_size * l.bias_grad)
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                v['w'] = (v['w'] * self._mu) - (self._step_size * l.weights_grad)
+                v['b'] = (v['b'] * self._mu) - (self._step_size * l.bias_grad)
 
-            l.weights += v['w']
-            l.bias += v['b']
+                l.weights += v['w']
+                l.bias += v['b']
 
 
 class RMSprop(Training):
@@ -551,8 +586,11 @@ class RMSprop(Training):
 
         # Initialize cache to zero
         for l in self._nn.layers:
-            c = {'w': np.zeros_like(l.weights),
-                 'b': np.zeros_like(l.bias)}
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                c = {'w': np.zeros_like(l.weights),
+                     'b': np.zeros_like(l.bias)}
+            else:
+                c = None
             self._cache.append(c)
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
@@ -562,11 +600,12 @@ class RMSprop(Training):
 
     def update_network(self, t=None):
         for l, c in zip(self._nn.layers, self._cache):
-            c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (l.weights_grad**2))
-            c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (l.bias_grad**2))
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (l.weights_grad**2))
+                c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (l.bias_grad**2))
 
-            l.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * l.weights_grad
-            l.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * l.bias_grad
+                l.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * l.weights_grad
+                l.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * l.bias_grad
 
 
 class Adam(Training):
@@ -588,12 +627,16 @@ class Adam(Training):
 
         # Initialize cache to zero
         for l in self._nn.layers:
-            m = {'w': np.zeros_like(l.weights),
-                 'b': np.zeros_like(l.bias)}
-            self._m.append(m)
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                m = {'w': np.zeros_like(l.weights),
+                     'b': np.zeros_like(l.bias)}
 
-            v = {'w': np.zeros_like(l.weights),
-                 'b': np.zeros_like(l.bias)}
+                v = {'w': np.zeros_like(l.weights),
+                     'b': np.zeros_like(l.bias)}
+            else:
+                m = None
+                v = None
+            self._m.append(m)
             self._v.append(v)
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
@@ -603,20 +646,21 @@ class Adam(Training):
 
     def update_network(self, t):
         for l, m, v in zip(self._nn.layers, self._m, self._v):
-            # First order moment update
-            m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * l.weights_grad)
-            m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * l.bias_grad)
+            if l.type in ['FC_Layer', 'Convolution_Layer']:
+                # First order moment update
+                m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * l.weights_grad)
+                m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * l.bias_grad)
 
-            # Second order moment update
-            v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (l.weights_grad**2))
-            v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (l.bias_grad**2))
+                # Second order moment update
+                v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (l.weights_grad**2))
+                v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (l.bias_grad**2))
 
-            # Update Weights
-            m_hat_w = m['w'] / (1.0 - self._beta_1**t)
-            v_hat_w = v['w'] / (1.0 - self._beta_2**t)
-            l.weights += -(self._step_size * m_hat_w) / (np.sqrt(v_hat_w) + 1e-8)
+                # Update Weights
+                m_hat_w = m['w'] / (1.0 - self._beta_1**t)
+                v_hat_w = v['w'] / (1.0 - self._beta_2**t)
+                l.weights += -(self._step_size * m_hat_w) / (np.sqrt(v_hat_w) + 1e-8)
 
-            # Update Bias
-            m_hat_b = m['b'] / (1.0 - self._beta_1**t)
-            v_hat_b = v['b'] / (1.0 - self._beta_2**t)
-            l.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
+                # Update Bias
+                m_hat_b = m['b'] / (1.0 - self._beta_1**t)
+                v_hat_b = v['b'] / (1.0 - self._beta_2**t)
+                l.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
