@@ -19,15 +19,24 @@ class Pool(Layer):
     """The Pooling Layer Class
     """
 
-    def __init__(self, inputs, receptive_field=None, padding='SAME', stride=None,
+    def __init__(self, inputs, receptive_field=None, padding='SAME', stride=None, pool='MAX',
                  name='Pooling_Layer'):
         super().__init__(name=name)
         self._type = 'Pooling_Layer'
         self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
 
+        if pool.upper() in ['MAX', 'AVG']:
+            self._pool = pool.upper()
+        else:
+            sys.exit("Error: Unknown pooling opration: " + pool + " in layer: ", name)
+
         # Set receptive field dimensions
-        r_field_height = receptive_field[0]
-        r_field_width = receptive_field[1]
+        if receptive_field is None:
+            r_field_height = self._inp_shape[1]
+            r_field_width = self._inp_shape[2]
+        else:
+            r_field_height = receptive_field[0]
+            r_field_width = receptive_field[1]
 
         # Reduce receptive field to fit input shape, if larger
         if self._inp_shape[1] < r_field_height:
@@ -160,7 +169,7 @@ class Pool(Layer):
         self._col_inds = c
 
 
-    def input_gradients(self, inp_grad, summed=True): # Pool-grad Algo-3
+    def input_gradients_max(self, inp_grad, summed=True): # Pool-grad Algo-3
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
         batch_size = inp_grad.shape[0]
         inp_dep = self._inp_shape[0]
@@ -195,17 +204,47 @@ class Pool(Layer):
         return out_grads
 
 
-    def forward(self, inputs, inference=None):
+    def input_gradients_avg(self, inp_grad, summed=True): # Pool-grad Algo-3
+        # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
+        batch_size = inp_grad.shape[0]
+        inp_dep = self._inp_shape[0]
+        field_size = np.prod(self._receptive_field)
+
+        # row = np.expand_dims(np.expand_dims(self._row_inds, axis=0), axis=0)
+        # col = np.expand_dims(np.expand_dims(self._col_inds, axis=0), axis=0)
+        row = self._row_inds[np.newaxis,np.newaxis,:,:]
+        col = self._col_inds[np.newaxis,np.newaxis,:,:]
+        batch = np.arange(batch_size).reshape(-1, 1, 1, 1)
+        dep = np.arange(inp_dep).reshape(1, -1, 1, 1)
+
+        if self._padding is None:
+            out_grad_shape = tuple((batch_size, *self._inp_shape))
+        else:
+            out_grad_rows_cols = np.array(self._inp_shape[1:]) + np.sum(np.array(self._padding),
+                                                                        axis=-1)
+            out_grad_shape = tuple((batch_size, inp_dep, *out_grad_rows_cols))
+        out_grads = np.zeros(out_grad_shape)
+
+        grads = inp_grad.reshape(batch_size, inp_dep, -1, 1) * \
+                np.array([1.0/field_size] * int(field_size)).reshape(1, 1, 1, -1)
+
+        np.add.at(out_grads, [batch, dep, row, col], grads)
+
+        if self._padding is not None:
+            pad_r = self._padding[0]
+            pad_c = self._padding[1]
+
+            if np.sum(pad_r) > 0:
+                out_grads = out_grads[:,:,pad_r[0]:-pad_r[1],:]
+
+            if np.sum(pad_c) > 0:
+                out_grads = out_grads[:,:,:,pad_c[0]:-pad_c[1]]
+
+        return out_grads
+
+    def forward_max(self, padded_inputs):
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
-
-        # Zero-pad input volume based on the setting
-        if self._padding is not None:
-            pad = self._padding
-            padded_inputs = np.pad(inputs, ((0,0),(0,0),*self._padding), 'constant',
-                                   constant_values=-np.inf)
-        else:
-            padded_inputs = inputs
 
         # Unroll input volume to shape: (batch, out_rows*out_cols, filter_size[hxw])
         unrolled_inputs = padded_inputs[:, :, self._row_inds, self._col_inds]
@@ -221,6 +260,36 @@ class Pool(Layer):
         return pooling_out.reshape(-1, *self.shape[1:])
 
 
+    def forward_avg(self, padded_inputs):
+        ker_h = self._receptive_field[0]
+        ker_w = self._receptive_field[1]
+
+        # Unroll input volume to shape: (batch, out_rows*out_cols, filter_size[hxw])
+        unrolled_inputs = padded_inputs[:, :, self._row_inds, self._col_inds]
+
+        # Pooling mask of each receptive field, per slice over the entire batch
+        avg_pool_out = np.mean(unrolled_inputs, axis=-1).reshape(-1, *self.shape[1:])
+
+        return avg_pool_out
+
+
+    def forward(self, inputs, inference=None):
+        # Zero-pad input volume based on the setting
+        if self._padding is not None:
+            pad = self._padding
+            padded_inputs = np.pad(inputs, ((0,0),(0,0),*self._padding), 'constant',
+                                   constant_values=-np.inf if self._pool == 'MAX' else 0)
+        else:
+            padded_inputs = inputs
+
+        if self._pool == 'MAX':
+            pool_out = self.forward_max(padded_inputs)
+        elif self._pool == 'AVG':
+            pool_out = self.forward_avg(padded_inputs)
+
+        return pool_out
+
+
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
         if len(inp_grad.shape) > 2: # The proceeding layer is a Convolution/Pooling layer
             pass
@@ -228,11 +297,13 @@ class Pool(Layer):
             # Reshape incoming gradients accordingly
             inp_grad = inp_grad.reshape(-1, *self._out_shape[1:])
 
-        out_grad = self.input_gradients(inp_grad)
-        self._pooling_mask = None
+        if self._pool == 'MAX':
+            out_grad = self.input_gradients_max(inp_grad)
+            self._pooling_mask = None
+        elif self._pool == 'AVG':
+            out_grad = self.input_gradients_avg(inp_grad)
 
         return out_grad
-
 
     def update_weights(self, alpha):
         pass

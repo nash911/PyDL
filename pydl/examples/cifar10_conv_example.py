@@ -66,40 +66,35 @@ def main():
     plt.waitforbuttonpress(0)
     plt.close(fig)
 
-    w_scale = 1.0
+    w_scale = 1e-0
+    xv = True
     dp = None
     bn = True
 
-    l1 = Conv(X, receptive_field=(3,3), num_filters=32, zero_padding=1, stride=1, name='Conv-1',
-              weight_scale=w_scale, xavier=True, activation_fn='ReLU', batchnorm=bn, dropout=dp)
+    l1 = Conv(X, receptive_field=(5,5), num_filters=16, zero_padding=2, stride=1, name='Conv-1',
+              weight_scale=w_scale, xavier=xv, activation_fn='ReLU', batchnorm=bn, dropout=dp)
 
-    l2 = Pool(l1, receptive_field=(2,2), stride=2, name='MaxPool-2')
+    l2 = Pool(l1, receptive_field=(2,2), stride=2, pool='MAX', name='MaxPool-2')
 
-    l3 = Conv(l2, receptive_field=(3,3), num_filters=32, zero_padding=1, stride=1, name='Conv-3',
-              weight_scale=w_scale, xavier=True, activation_fn='ReLU', batchnorm=bn, dropout=dp)
+    l3 = Conv(l2, receptive_field=(5,5), num_filters=20, zero_padding=2, stride=1, name='Conv-3',
+              weight_scale=w_scale, xavier=xv, activation_fn='ReLU', batchnorm=bn, dropout=dp)
 
-    l4 = Pool(l3, receptive_field=(2,2), stride=1, name='MaxPool-4')
+    l4 = Pool(l3, receptive_field=(2,2), stride=2, pool='MAX', name='MaxPool-4')
 
-    l5 = Conv(l4, receptive_field=(3,3), num_filters=16, zero_padding=1, stride=1, name='Conv-5',
-              weight_scale=w_scale, xavier=True, activation_fn='ReLU', batchnorm=bn, dropout=dp)
+    l5 = Conv(l4, receptive_field=(5,5), num_filters=20, zero_padding=2, stride=1, name='Conv-5',
+              weight_scale=w_scale, xavier=xv, activation_fn='ReLU', batchnorm=bn, dropout=dp)
 
-    l6 = Pool(l5, receptive_field=(2,2), stride=1, name='MaxPool-6')
+    l6 = Pool(l5, receptive_field=None, stride=2, pool='AVG', name='MaxPool-6')
 
-    l7 = FC(l6, num_neurons=128, weight_scale=w_scale, xavier=True, activation_fn='ReLU',
-            batchnorm=bn, dropout=0.9, name="FC-7")
-
-    l8 = FC(l7, num_neurons=64, weight_scale=w_scale, xavier=True, activation_fn='ReLU',
-            batchnorm=bn, dropout=0.9, name="FC-8")
-
-    l9 = FC(l8, num_neurons=K, weight_scale=w_scale, xavier=True, activation_fn='SoftMax',
+    l7 = FC(l6, num_neurons=K, weight_scale=w_scale, xavier=xv, activation_fn='SoftMax',
              name="Output-Layer")
 
-    layers = [l1, l2, l3, l4, l5, l6, l7, l8, l9]
+    layers = [l1, l2, l3, l4, l5, l6, l7]
 
     nn = NN(X, layers)
-    adam = Adam(nn, step_size=1e-2, beta_1=0.9,  beta_2=0.999, reg_lambda=1e-1, train_size=50000,
+    adam = Adam(nn, step_size=1e-2, beta_1=0.9,  beta_2=0.999, reg_lambda=1e-4, train_size=50000,
                 test_size=10000)
-    adam.train(X, y, normalize='mean', shuffle=False, batch_size=256, epochs=10000, log_freq=1,
+    adam.train(X, y, normalize='mean', shuffle=False, batch_size=16, epochs=10000, log_freq=1,
                plot='MNIST - Adam - Dropout')
 
 

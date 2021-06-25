@@ -11,6 +11,7 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 import itertools
+import time
 
 from pydl.nn.layers import FC
 from pydl.nn.conv import Conv
@@ -643,13 +644,14 @@ class TestNN(unittest.TestCase):
             rec_h_3 = 2
             rec_w_3 = 2
             stride_3 = 2
-            l3 = Pool(l2, receptive_field=(rec_h_3, rec_w_3), stride=stride_3, name='MaxPool-3')
+            l3 = Pool(l2, receptive_field=(rec_h_3, rec_w_3), stride=stride_3, pool='MAX',
+                      name='MaxPool-3')
 
             # Layer 4 - Convolution
-            num_kernals_4 = 3
-            rec_h_4 = 1
-            rec_w_4 = 1
-            pad_4 = 0
+            num_kernals_4 = 4
+            rec_h_4 = 3
+            rec_w_4 = 3
+            pad_4 = 1
             stride_4 = 1
             w_4 = np.random.randn(num_kernals_4, num_kernals_2, rec_h_4, rec_w_4)
             b_4 = np.random.uniform(-1, 1, (1, num_kernals_4))
@@ -664,33 +666,54 @@ class TestNN(unittest.TestCase):
             rec_h_5 = 2
             rec_w_5 = 2
             stride_5 = 2
-            l5 = Pool(l4, receptive_field=(rec_h_5, rec_w_5), stride=stride_5, name='MaxPool-5')
+            l5 = Pool(l4, receptive_field=(rec_h_5, rec_w_5), stride=stride_5, pool='AVG',
+                      name='MaxPool-5')
 
-            # Layer 6 - FC
-            w_6 = np.random.randn(np.prod(l5.shape[1:]), 32)
-            b_6 = np.random.uniform(-1, 1, (1, 32))
+            # Layer 6 - Convolution
+            num_kernals_6 = 7
+            rec_h_6 = 1
+            rec_w_6 = 1
+            pad_6 = 0
+            stride_6 = 1
+            w_6 = np.random.randn(num_kernals_6, num_kernals_4, rec_h_6, rec_w_6)
+            b_6 = np.random.uniform(-1, 1, (1, num_kernals_6))
             dp6 = np.random.rand()
-            l6 = FC(l5, num_neurons=w_6.shape[-1], weights=w_6, bias=b_6, activation_fn='Tanh',
-                      name='FC-6', batchnorm=True, dropout=dp6)
-            mask_l6 = np.array(np.random.rand(batch_size, w_6.shape[-1]) < dp6, dtype=conf.dtype)
+
+            l6 = Conv(l5, weights=w_6, bias=b_6, zero_padding=pad_6, stride=stride_6,
+                      activation_fn='ReLU', name='Conv-6', batchnorm=True, dropout=dp6)
+            mask_l6 = np.array(np.random.rand(batch_size, *l6.shape[1:]) < dp6, dtype=conf.dtype)
             l6.dropout_mask = mask_l6
 
-            # Layer 7 - FC
-            w_7 = np.random.randn(w_6.shape[-1], 16)
-            b_7 = np.random.uniform(-1, 1, (1, 16))
-            dp7 = np.random.rand()
-            l7 = FC(l5, num_neurons=w_7.shape[-1], weights=w_7, bias=b_7,
-                      activation_fn='Linear', name='FC-7', batchnorm=True, dropout=dp7)
-            mask_l7 = np.array(np.random.rand(batch_size, w_7.shape[-1]) < dp7, dtype=conf.dtype)
-            l7.dropout_mask = mask_l7
+            # Layer 7 - MaxPool
+            stride_7 = 1
+            l7 = Pool(l6, receptive_field=None, stride=stride_7, pool='AVG', name='MaxPool-7')
 
-            # Layer 8 - SoftMax
-            w_8 = np.random.randn(w_7.shape[-1], 10)
-            b_8 = np.random.uniform(-1, 1, (1, 10))
-            l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8,
-                      activation_fn='SoftMax', name='Softmax-8')
+            # Layer 8 - FC
+            w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
+            print("l7.shape: ", l7.shape)
+            b_8 = np.random.uniform(-1, 1, (1, 32))
+            dp8 = np.random.rand()
+            l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
+                      name='FC-8', batchnorm=True, dropout=dp8)
+            mask_l8 = np.array(np.random.rand(batch_size, w_8.shape[-1]) < dp8, dtype=conf.dtype)
+            l8.dropout_mask = mask_l8
 
-            layers = [l1, l2, l3, l4, l5, l6, l7, l8]
+            # Layer 9 - FC
+            w_9 = np.random.randn(w_8.shape[-1], 16)
+            b_9 = np.random.uniform(-1, 1, (1, 16))
+            dp9 = np.random.rand()
+            l9 = FC(l8, num_neurons=w_9.shape[-1], weights=w_9, bias=b_9,
+                      activation_fn='Linear', name='FC-9', batchnorm=True, dropout=dp9)
+            mask_l9 = np.array(np.random.rand(batch_size, w_9.shape[-1]) < dp9, dtype=conf.dtype)
+            l9.dropout_mask = mask_l9
+
+            # Layer 10 - SoftMax
+            w_10 = np.random.randn(w_9.shape[-1], 10)
+            b_10 = np.random.uniform(-1, 1, (1, 10))
+            l10 = FC(l9, num_neurons=w_10.shape[-1], weights=w_10, bias=b_10,
+                     activation_fn='SoftMax', name='Softmax-10')
+
+            layers = [l1, l2, l3, l4, l5, l6, l7, l8, l9, l10]
             nn = NN(X, layers)
 
             for _ in range(1):
@@ -699,20 +722,24 @@ class TestNN(unittest.TestCase):
 
 
     def performance_test_convolution_pooling(self):
-        def test(nn, inp):
-            # for _ in range(iterations):
+        def test(nn, inp, i):
+            start = time.time()
             nn_out = nn.forward(inp)
+            end = time.time()
+            print("%d - Forward Time: %.8f" % (i, (end-start)*16))
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
             inputs_grad = nn.backward(inp_grad)
+            print("%d - Backward Time: %.8f" % (i, (time.time()-end)*16))
             nn.update_weights(1e-4)
 
         for _ in range(1):
             # Inputs
-            batch_size = 64
-            depth = 8
+            batch_size = 16
+            depth = 3
             num_rows = 32
             num_cols = 32
             X = np.empty((batch_size, depth, num_rows, num_cols))
+            bn = False
 
             # Case-1
             # ------
@@ -721,89 +748,71 @@ class TestNN(unittest.TestCase):
             num_kernals_1 = 16
             rec_h_1 = 5
             rec_w_1 = 5
-            pad_1 = 0
-            stride_1 = 3
+            pad_1 = 2
+            stride_1 = 1
             w_1 = np.random.randn(num_kernals_1, depth, rec_h_1, rec_w_1)
             b_1 = np.random.uniform(-1, 1, (1, num_kernals_1))
-            dp1 = np.random.rand()
-
+            dp1 = None
             l1 = Conv(X, weights=w_1, bias=b_1, zero_padding=pad_1, stride=stride_1,
-                      activation_fn='ReLU', name='Conv-1', batchnorm=True, dropout=dp1)
-            mask_l1 = np.array(np.random.rand(batch_size, *l1.shape[1:]) < dp1, dtype=conf.dtype)
-            l1.dropout_mask = mask_l1
+                      activation_fn='ReLU', name='Conv-1', batchnorm=bn, dropout=dp1)
 
-            # Layer 2 - Convolution
-            num_kernals_2 = 16
-            rec_h_2 = 3
-            rec_w_2 = 3
-            pad_2 = 0
-            stride_2 = 1
-            w_2 = np.random.randn(num_kernals_2, num_kernals_1, rec_h_2, rec_w_2)
-            b_2 = np.random.uniform(-1, 1, (1, num_kernals_2))
-            dp2 = np.random.rand()
+            # Layer 2 - MaxPool
+            rec_h_2 = 2
+            rec_w_2 = 2
+            stride_2 = 2
+            l2 = Pool(l1, receptive_field=(rec_h_2, rec_w_2), stride=stride_2, name='MaxPool-2')
 
-            l2 = Conv(l1, weights=w_2, bias=b_2, zero_padding=pad_2, stride=stride_2,
-                      activation_fn='ReLU', name='Conv-2', batchnorm=True, dropout=dp2)
-            mask_l2 = np.array(np.random.rand(batch_size, *l2.shape[1:]) < dp2, dtype=conf.dtype)
-            l2.dropout_mask = mask_l2
+            # Layer 3 - Convolution
+            num_kernals_3 = 20
+            rec_h_3 = 5
+            rec_w_3 = 5
+            pad_3 = 2
+            stride_3 = 1
+            w_3 = np.random.randn(num_kernals_3, num_kernals_1, rec_h_3, rec_w_3)
+            b_3 = np.random.uniform(-1, 1, (1, num_kernals_3))
+            dp3 = None
+            l3 = Conv(l2, weights=w_3, bias=b_3, zero_padding=pad_3, stride=stride_3,
+                      activation_fn='ReLU', name='Conv-3', batchnorm=bn, dropout=dp3)
 
-            # Layer 3 - MaxPool
-            rec_h_3 = 2
-            rec_w_3 = 2
-            stride_3 = 2
-            l3 = Pool(l2, receptive_field=(rec_h_3, rec_w_3), stride=stride_3, name='MaxPool-3')
+            # Layer 4 - MaxPool
+            rec_h_4 = 2
+            rec_w_4 = 2
+            stride_4 = 2
+            l4 = Pool(l3, receptive_field=(rec_h_4, rec_w_4), stride=stride_4, pool='MAX',
+                      name='MaxPool-4')
 
-            # Layer 4 - Convolution
-            num_kernals_4 = 8
-            rec_h_4 = 1
-            rec_w_4 = 1
-            pad_4 = 0
-            stride_4 = 1
-            w_4 = np.random.randn(num_kernals_4, num_kernals_2, rec_h_4, rec_w_4)
-            b_4 = np.random.uniform(-1, 1, (1, num_kernals_4))
-            dp4 = np.random.rand()
+            # Layer 5 - Convolution
+            num_kernals_5 = 20
+            rec_h_5 = 5
+            rec_w_5 = 5
+            pad_5 = 2
+            stride_5 = 1
+            w_5 = np.random.randn(num_kernals_5, num_kernals_3, rec_h_5, rec_w_5)
+            b_5 = np.random.uniform(-1, 1, (1, num_kernals_5))
+            dp5 = None
+            l5 = Conv(l4, weights=w_5, bias=b_5, zero_padding=pad_5, stride=stride_5,
+                      activation_fn='ReLU', name='Conv-5', batchnorm=bn, dropout=dp5)
 
-            l4 = Conv(l3, weights=w_4, bias=b_4, zero_padding=pad_4, stride=stride_4,
-                      activation_fn='ReLU', name='Conv-4', batchnorm=True, dropout=dp4)
-            mask_l4 = np.array(np.random.rand(batch_size, *l4.shape[1:]) < dp4, dtype=conf.dtype)
-            l4.dropout_mask = mask_l4
+            # Layer 6 - MaxPool
+            rec_h_6 = 2
+            rec_w_6 = 2
+            stride_6 = 2
+            l6 = Pool(l5, receptive_field=(rec_h_6, rec_w_6), stride=stride_6, pool='AVG',
+                      name='MaxPool-6')
 
-            # Layer 5 - MaxPool
-            rec_h_5 = 2
-            rec_w_5 = 2
-            stride_5 = 2
-            l5 = Pool(l4, receptive_field=(rec_h_5, rec_w_5), stride=stride_5, name='MaxPool-5')
+            # Layer 7 - SoftMax
+            w_7 = np.random.randn(np.prod(l6.shape[1:]), 10)
+            b_7 = np.random.uniform(-1, 1, (1, 10))
+            l7 = FC(l6, num_neurons=10, weights=w_7, bias=b_7, activation_fn='SoftMax',
+                    name='Softmax-7')
 
-            # Layer 6 - FC
-            w_6 = np.random.randn(np.prod(l5.shape[1:]), 32)
-            b_6 = np.random.uniform(-1, 1, (1, 32))
-            dp6 = np.random.rand()
-            l6 = FC(l5, num_neurons=w_6.shape[-1], weights=w_6, bias=b_6, activation_fn='Tanh',
-                      name='FC-6', batchnorm=True, dropout=dp6)
-            mask_l6 = np.array(np.random.rand(batch_size, w_6.shape[-1]) < dp6, dtype=conf.dtype)
-            l6.dropout_mask = mask_l6
-
-            # Layer 7 - FC
-            w_7 = np.random.randn(w_6.shape[-1], 16)
-            b_7 = np.random.uniform(-1, 1, (1, 16))
-            dp7 = np.random.rand()
-            l7 = FC(l5, num_neurons=w_7.shape[-1], weights=w_7, bias=b_7,
-                      activation_fn='Linear', name='FC-7', batchnorm=True, dropout=dp7)
-            mask_l7 = np.array(np.random.rand(batch_size, w_7.shape[-1]) < dp7, dtype=conf.dtype)
-            l7.dropout_mask = mask_l7
-
-            # Layer 8 - SoftMax
-            w_8 = np.random.randn(w_7.shape[-1], 10)
-            b_8 = np.random.uniform(-1, 1, (1, 10))
-            l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8,
-                      activation_fn='SoftMax', name='Softmax-8')
-
-            layers = [l1, l2, l3, l4, l5, l6, l7, l8]
+            layers = [l1, l2, l3, l4, l5, l6, l7]
             nn = NN(X, layers)
 
-            for _ in range(100):
+            for i in range(5):
                 X = np.random.uniform(-1, 1, (batch_size, depth, num_rows, num_cols))
-                test(nn, X)
+                test(nn, X, i)
+
 
 if __name__ == '__main__':
     unittest.main()
