@@ -115,6 +115,10 @@ class Layer(ABC):
         assert(b.shape == self._bias.shape)
         self._bias = b
 
+    @activation.setter
+    def activation(self, actvn_fn):
+        self._activation_fn = activations[actvn_fn.lower()]()
+
     @dropout_mask.setter
     def dropout_mask(self, d_mask):
         warnings.warn("\nWARNING! Setting dropout_mask for a layer. Preset dropout mask should " +

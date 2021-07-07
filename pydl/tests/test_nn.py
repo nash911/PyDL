@@ -16,6 +16,7 @@ import time
 from pydl.nn.layers import FC
 from pydl.nn.conv import Conv
 from pydl.nn.pool import Pool
+from pydl.nn.residual_block import ResidualBlock
 from pydl.nn.nn import NN
 from pydl import conf
 
@@ -714,6 +715,192 @@ class TestNN(unittest.TestCase):
                      activation_fn='SoftMax', name='Softmax-10')
 
             layers = [l1, l2, l3, l4, l5, l6, l7, l8, l9, l10]
+            nn = NN(X, layers)
+
+            for _ in range(1):
+                X = np.random.uniform(-1, 1, (batch_size, depth, num_rows, num_cols))
+                test(nn, layers, X)
+
+
+    def test_backward_resnet(self):
+        self.delta = 1e-6
+        def test(nn, layers, inp):
+            nn_out = nn.forward(inp)
+            inp_grad = np.random.uniform(-1, 1, nn_out.shape)
+            inputs_grad = nn.backward(inp_grad)
+
+            for layer in layers:
+                if layer.type == 'Res_Block':
+                    res_block_layers = layer.layers
+                    for res_layer in res_block_layers:
+                        if res_layer.type == 'FC_Layer':
+                            self.fc_layer_grads_test(nn, res_layer, inp, inp_grad, self.delta)
+                        elif res_layer.type == 'Convolution_Layer':
+                            self.conv_layer_grads_test(nn, res_layer, inp, inp_grad, self.delta)
+                    skip_conv = layer.skip_convolution
+                    if skip_conv is not None:
+                        print("skip_conv gradient check")
+                        self.conv_layer_grads_test(nn, skip_conv, inp, inp_grad, self.delta)
+                else:
+                    if layer.type == 'FC_Layer':
+                        self.fc_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                    elif layer.type == 'Convolution_Layer':
+                        self.conv_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                    elif layer.type == 'Pooling_Layer':
+                        continue
+
+            # Inputs finite difference gradients
+            self.inputs_3D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
+
+        for _ in range(1):
+            # Inputs
+            batch_size = 8
+            depth = 3
+            num_rows = 18
+            num_cols = 18
+            X = np.empty((batch_size, depth, num_rows, num_cols))
+
+            # ResNet Architecture
+            # Residual Block 1
+            # Layer 1 - Convolution
+            num_kernals_1 = 4
+            rec_h_1 = 3
+            rec_w_1 = 3
+            pad_1 = 1
+            stride_1 = 1
+            w_1 = np.random.randn(num_kernals_1, depth, rec_h_1, rec_w_1)
+            b_1 = np.random.uniform(-1, 1, (1, num_kernals_1))
+            dp1 = np.random.rand()
+
+            l1 = Conv(X, weights=w_1, bias=b_1, zero_padding=pad_1, stride=stride_1,
+                      activation_fn='ReLU', name='Conv-1', batchnorm=True, dropout=dp1)
+            mask_l1 = np.array(np.random.rand(batch_size, *l1.shape[1:]) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            # Layer 2 - MaxPool
+            rec_h_2 = 2
+            rec_w_2 = 2
+            stride_2 = 2
+            l2 = Pool(l1, receptive_field=(rec_h_2, rec_w_2), stride=stride_2, pool='MAX',
+                      name='MaxPool-2')
+
+            # Residual Block 1
+            rcp_field_1 = [3, 3, 3]
+            num_filters_1 = [4, 4, 4]
+            activation_fn_1 = ['Relu', 'Relu', 'Relu']
+            stride_1 = 1
+            conv_layers_1 = [l2]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_1, num_filters_1, activation_fn_1)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_1[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_1 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-1-%d'%(i+1))
+                conv_layers_1.append(conv)
+
+            res_block_1 = ResidualBlock(l2, conv_layers_1[1:], activation_fn='Relu')
+
+            # Residual Block 2
+            rcp_field_2 = [1, 3, 1]
+            num_filters_2 = [4, 6, 4]
+            activation_fn_2 = ['Relu', 'Relu', 'Relu']
+            stride_2 = 1
+            conv_layers_2 = [res_block_1]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_2, num_filters_2, activation_fn_2)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_2[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_2 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-2-%d'%(i+1))
+                conv_layers_2.append(conv)
+
+            res_block_2 = ResidualBlock(res_block_1, conv_layers_2[1:], activation_fn='Relu')
+
+            # Residual Block 3
+            rcp_field_3 = [1, 3, 1]
+            num_filters_3 = [4, 4, 4]
+            activation_fn_3 = ['Relu', 'Relu', 'Relu']
+            stride_3 = 2
+            conv_layers_3 = [res_block_2]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_3, num_filters_3, activation_fn_3)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_3[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_3 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-3-%d'%(i+1))
+                conv_layers_3.append(conv)
+
+            res_block_3 = ResidualBlock(res_block_2, conv_layers_3[1:], activation_fn='Relu')
+
+            # Residual Block 4
+            rcp_field_4 = [1, 3, 1]
+            num_filters_4 = [4, 4, 6]
+            activation_fn_4 = ['Relu', 'Relu', 'Relu']
+            stride_4 = 1
+            conv_layers_4 = [res_block_3]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_4, num_filters_4, activation_fn_4)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_4[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_4 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-4-%d'%(i+1))
+                conv_layers_4.append(conv)
+
+            res_block_4 = ResidualBlock(res_block_3, conv_layers_4[1:], activation_fn='Relu')
+
+            # Residual Block 5
+            rcp_field_5 = [1, 3, 1, 3, 1]
+            num_filters_5 = [1, 2, 3, 4, 5]
+            activation_fn_5 = ['Relu', 'Linear', 'Sigmoid', 'Tanh', 'Relu']
+            stride_5 = 2
+            conv_layers_5 = [res_block_4]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_5, num_filters_5, activation_fn_5)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_5[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_5 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-5-%d'%(i+1))
+                conv_layers_5.append(conv)
+
+            res_block_5 = ResidualBlock(res_block_4, conv_layers_5[1:], activation_fn='Relu')
+
+            # Residual Block 6
+            rcp_field_6 = [1]
+            num_filters_6 = [10]
+            activation_fn_6 = ['ReLU']
+            stride_6 = 1
+            conv_layers_6 = [res_block_5]
+            for i, (rcp, n_filters, actv_fn) in \
+                enumerate(zip(rcp_field_6, num_filters_6, activation_fn_6)):
+                pad = int((rcp-1)/2)
+                conv = Conv(conv_layers_6[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
+                            zero_padding=pad, stride=(stride_6 if i==0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-6-%d'%(i+1))
+                conv_layers_6.append(conv)
+
+            res_block_6 = ResidualBlock(res_block_5, conv_layers_6[1:], activation_fn='Linear')
+
+            # Layer 7 - MaxPool
+            stride_7 = 1
+            l7 = Pool(res_block_6, receptive_field=(3, 3), stride=1, pool='AVG', name='MaxPool-7')
+
+            # Layer 8 - FC
+            w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
+            b_8 = np.random.uniform(-1, 1, (1, 32))
+            dp8 = np.random.rand()
+            l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
+                      name='FC-8', batchnorm=True, dropout=dp8)
+            mask_l8 = np.array(np.random.rand(batch_size, w_8.shape[-1]) < dp8, dtype=conf.dtype)
+            l8.dropout_mask = mask_l8
+
+            # Layer 9 - SoftMax
+            w_9 = np.random.randn(w_8.shape[-1], 10)
+            b_9 = np.random.uniform(-1, 1, (1, 10))
+            l9 = FC(l8, num_neurons=w_9.shape[-1], weights=w_9, bias=b_9, activation_fn='SoftMax',
+                    name='Softmax-10')
+
+            layers = [l1, l2, res_block_1, res_block_2, res_block_3, res_block_4, res_block_5,
+                      res_block_6, l7, l8, l9]
             nn = NN(X, layers)
 
             for _ in range(1):
