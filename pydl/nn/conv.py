@@ -41,12 +41,22 @@ class Conv(Layer):
         self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
         self._receptive_field = receptive_field # Filter's (height, width)
         self._num_filters = num_filters
-        self._zero_padding = zero_padding
         self._stride = stride
         self._weight_scale = weight_scale
         self._xavier = xavier
         self._has_bias = True if type(bias) == np.ndarray else bias
         self._activation_fn = activations[activation_fn.lower()]()
+
+        # Initialize Zero Padding dims
+        if type(zero_padding) == int:
+            self._zero_padding = tuple((zero_padding,zero_padding))
+        elif type(zero_padding) == tuple :
+            if zero_padding[1] == 0  and zero_padding[0] > 0:
+                sys.exit("Error: Second dimension of Zerro-Padding must be greater than zero.")
+            self._zero_padding = zero_padding
+        else:
+            sys.exit("Error: Unidentified data type for Zerro-Padding. Use either int or " +
+                     "tuple((int,int)).")
 
         # Initialize Weights
         self.init_weights(weights)
@@ -212,9 +222,10 @@ class Conv(Layer):
         f_w = self._receptive_field[1]
 
         # Calculate output volume's height and width:
-        # (W - F + 2P)/S + 1 --> W: Input volume size | F: Receptive field size | P: Pad | S: Stride
-        o_h = ((i_h - f_h + (2*self._zero_padding)) / self._stride) + 1
-        o_w = ((i_w - f_w + (2*self._zero_padding)) / self._stride) + 1
+        # (W - F + p_0 + p_1)/S + 1 --> W: Input volume size | F: Receptive field size | p_0: Pad_0
+        # | p_1: Pad_1 | S: Stride
+        o_h = ((i_h - f_h + np.sum(self._zero_padding)) / self._stride) + 1
+        o_w = ((i_w - f_w + np.sum(self._zero_padding)) / self._stride) + 1
 
         # Assert if the layer hyperparameter combination is valid for the layer's input shape
         if(o_h % 1 != 0 or o_w % 1 != 0):
@@ -238,11 +249,11 @@ class Conv(Layer):
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
 
-        window_row_inds = inp_h - (ker_h-1) + (2*self._zero_padding)
-        window_col_inds = inp_w - (ker_w-1) + (2*self._zero_padding)
+        window_row_inds = inp_h - (ker_h-1) + np.sum(self._zero_padding)
+        window_col_inds = inp_w - (ker_w-1) + np.sum(self._zero_padding)
 
-        out_h = int((inp_h - ker_h + (2*self._zero_padding)) / self._stride) + 1
-        out_w = int((inp_w - ker_w + (2*self._zero_padding)) / self._stride) + 1
+        out_h = int((inp_h - ker_h + np.sum(self._zero_padding)) / self._stride) + 1
+        out_w = int((inp_w - ker_w + np.sum(self._zero_padding)) / self._stride) + 1
 
         r0 = np.repeat(np.arange(ker_h), ker_w)
         r1 = np.repeat(np.arange(window_row_inds, step=self._stride), out_w)
@@ -261,9 +272,10 @@ class Conv(Layer):
 
     def score_fn(self, inputs, weights=None):
         # Zero-pad input volume based on the setting
-        if self._zero_padding > 0:
-            pad = self._zero_padding
-            padded_inputs = np.pad(inputs, ((0,0),(0,0),(pad,pad),(pad,pad)), 'constant')
+        if np.sum(self._zero_padding) > 0:
+            pad_0 = self._zero_padding[0]
+            pad_1 = self._zero_padding[1]
+            padded_inputs = np.pad(inputs, ((0,0),(0,0),(pad_0,pad_1),(pad_0,pad_1)), 'constant')
         else:
             padded_inputs = inputs
 
@@ -324,8 +336,8 @@ class Conv(Layer):
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
         batch_size = inp_grad.shape[0]
         inp_d = self._inp_shape[0]
-        padded_inp_h = self._inp_shape[1] + (2*self._zero_padding)
-        padded_inp_w = self._inp_shape[2] + (2*self._zero_padding)
+        padded_inp_h = self._inp_shape[1] + np.sum(self._zero_padding)
+        padded_inp_w = self._inp_shape[2] + np.sum(self._zero_padding)
 
         # weight * inp_grads
         w_inp_grad = self._weights.reshape(self._num_filters, -1, 1) * \
@@ -337,9 +349,10 @@ class Conv(Layer):
         np.add.at(out_grads, [batch_inds, self._slice_inds, self._row_inds, self._col_inds],
                   w_inp_grad)
 
-        if self._zero_padding > 0:
-            pad = self._zero_padding
-            out_grads = out_grads[:,:,pad:-pad,pad:-pad]
+        if np.sum(self._zero_padding) > 0:
+            pad_0 = self._zero_padding[0]
+            pad_1 = self._zero_padding[1]
+            out_grads = out_grads[:,:,pad_0:-pad_1,pad_0:-pad_1]
 
         return out_grads
 

@@ -630,7 +630,7 @@ class TestNN(unittest.TestCase):
             num_kernals_2 = 5
             rec_h_2 = 3
             rec_w_2 = 3
-            pad_2 = 0
+            pad_2 = (0,0)
             stride_2 = 1
             w_2 = np.random.randn(num_kernals_2, num_kernals_1, rec_h_2, rec_w_2)
             b_2 = np.random.uniform(-1, 1, (1, num_kernals_2))
@@ -652,7 +652,7 @@ class TestNN(unittest.TestCase):
             num_kernals_4 = 4
             rec_h_4 = 3
             rec_w_4 = 3
-            pad_4 = 1
+            pad_4 = (1,2)
             stride_4 = 1
             w_4 = np.random.randn(num_kernals_4, num_kernals_2, rec_h_4, rec_w_4)
             b_4 = np.random.uniform(-1, 1, (1, num_kernals_4))
@@ -691,7 +691,6 @@ class TestNN(unittest.TestCase):
 
             # Layer 8 - FC
             w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
-            print("l7.shape: ", l7.shape)
             b_8 = np.random.uniform(-1, 1, (1, 32))
             dp8 = np.random.rand()
             l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',

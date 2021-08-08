@@ -41,7 +41,7 @@ class ResidualBlock(Layer):
         self._block_layers[-1].activation = 'Linear'
 
         skip_size = self._skip_connect.shape[1:]
-        block_out_shape =  self._block_layers[-1].shape[1:]
+        block_out_shape = self._block_layers[-1].shape[1:]
 
         if skip_size != block_out_shape:
             self._skip_convolution = \
