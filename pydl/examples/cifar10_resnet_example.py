@@ -124,26 +124,21 @@ def main():
     res_block_1C = ResidualBlock(res_block_1B, conv_layers_1C[1:], activation_fn='Relu',
                                  name='ResBlock-1C')
 
-
-    maxpool_layer_2 = Pool(res_block_1C, receptive_field=(2,2), stride=2, pool='MAX',
-                           name='MaxPool-2')
-
-
     # Residual Block 2A
     rcp_field_2A = [3, 3]
     num_filters_2A = [32, 32]
     activation_fn_2A = ['Relu', 'Relu']
-    stride_2A = 1
-    conv_layers_2A = [maxpool_layer_2]
+    stride_2A = 2
+    conv_layers_2A = [res_block_1C]
     for i, (rcp, n_filters, actv_fn) in \
         enumerate(zip(rcp_field_2A, num_filters_2A, activation_fn_2A)):
-        pad = int((rcp-1)/2)
+        pad = (0,1) if i==0 else int((rcp-1)/2)
         conv = Conv(conv_layers_2A[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
                     zero_padding=pad, stride=(stride_2A if i==0 else 1), batchnorm=True,
                     activation_fn=actv_fn, name='Conv-2A_%d'%(i+1))
         conv_layers_2A.append(conv)
 
-    res_block_2A = ResidualBlock(maxpool_layer_2, conv_layers_2A[1:], activation_fn='Relu',
+    res_block_2A = ResidualBlock(res_block_1C, conv_layers_2A[1:], activation_fn='Relu',
                                  name='ResBlock-2A')
 
 
@@ -182,26 +177,21 @@ def main():
     res_block_2C = ResidualBlock(res_block_2B, conv_layers_2C[1:], activation_fn='Relu',
                                  name='ResBlock-2C')
 
-
-    maxpool_layer_3 = Pool(res_block_2C, receptive_field=(2,2), stride=2, pool='MAX',
-                           name='MaxPool-3')
-
-
     # Residual Block 3A
     rcp_field_3A = [3, 3]
     num_filters_3A = [64, 64]
     activation_fn_3A = ['Relu', 'Relu']
-    stride_3A = 1
-    conv_layers_3A = [maxpool_layer_3]
+    stride_3A = 2
+    conv_layers_3A = [res_block_2C]
     for i, (rcp, n_filters, actv_fn) in \
         enumerate(zip(rcp_field_3A, num_filters_3A, activation_fn_3A)):
-        pad = int((rcp-1)/2)
+        pad = (0,1) if i==0 else int((rcp-1)/2)
         conv = Conv(conv_layers_3A[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
                     zero_padding=pad, stride=(stride_3A if i==0 else 1), batchnorm=True,
                     activation_fn=actv_fn, name='Conv-3A_%d'%(i+1))
         conv_layers_3A.append(conv)
 
-    res_block_3A = ResidualBlock(maxpool_layer_3, conv_layers_3A[1:], activation_fn='Relu',
+    res_block_3A = ResidualBlock(res_block_2C, conv_layers_3A[1:], activation_fn='Relu',
                                  name='ResBlock-3A')
 
 
@@ -245,9 +235,8 @@ def main():
     output_layer = FC(avg_pool_layer, num_neurons=K, weight_scale=w_scale, xavier=xv,
                       activation_fn='SoftMax', name="Output-Layer")
 
-    layers = [l1, res_block_1A, res_block_1B, res_block_1C, maxpool_layer_2, res_block_2A,
-              res_block_2B, res_block_2C, maxpool_layer_3, res_block_3A, res_block_3B, res_block_3C,
-              avg_pool_layer, output_layer]
+    layers = [l1, res_block_1A, res_block_1B, res_block_1C, res_block_2A, res_block_2B,
+              res_block_2C, res_block_3A, res_block_3B, res_block_3C, avg_pool_layer, output_layer]
 
     nn = NN(X, layers)
 

@@ -35,7 +35,7 @@ class Conv(Layer):
 
     def __init__(self, inputs, receptive_field=None, num_filters=None, zero_padding=0, stride=1,
                  weights=None, bias=True, weight_scale=1.0, xavier=True, activation_fn='ReLU',
-                 batchnorm=False, dropout=None, name='ConvLayer'):
+                 batchnorm=False, dropout=None, force_adjust_output_shape=False, name='ConvLayer'):
         super().__init__(name=name)
         self._type = 'Convolution_Layer'
         self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
@@ -57,6 +57,11 @@ class Conv(Layer):
         else:
             sys.exit("Error: Unidentified data type for Zerro-Padding. Use either int or " +
                      "tuple((int,int)).")
+
+        if force_adjust_output_shape and np.sum(self._zero_padding) > 0:
+            sys.exit("Error: Force adjusting output shape with zero padding.")
+        else:
+            self._force_adjust_output_shape = force_adjust_output_shape
 
         # Initialize Weights
         self.init_weights(weights)
@@ -227,12 +232,23 @@ class Conv(Layer):
         o_h = ((i_h - f_h + np.sum(self._zero_padding)) / self._stride) + 1
         o_w = ((i_w - f_w + np.sum(self._zero_padding)) / self._stride) + 1
 
+        if self._force_adjust_output_shape:
+            if f_h == 1 or self._stride % 2 == 1:
+                o_h = np.floor(o_h)
+            else:
+                o_h = np.ceil(o_h)
+
+            if f_w == 1 or self._stride % 2 == 1:
+                o_w = np.floor(o_w)
+            else:
+                o_w = np.ceil(o_w)
+
         # Assert if the layer hyperparameter combination is valid for the layer's input shape
         if(o_h % 1 != 0 or o_w % 1 != 0):
             # print("Error\n Layer: %s\n Input shape: (%d, %d, %d)\n Receptive field: (%d, %d) \
-            #        \n Zero passing: %d\n Stride: %d\n" %
-            #       (self.name, self._inp_shape[0], self._inp_shape[1], self._inp_shape[2], f_h, f_w,
-            #        self._zero_padding, self._stride))
+            #        \n Zero passing: (%d, %d)\n Stride: %d\n Output Shape: (%f, %f)" %
+            #       (self.name, self._inp_shape[0], self._inp_shape[1], self._inp_shape[2], f_h,
+            #        f_w, self._zero_padding[0], self._zero_padding[1], self._stride, o_h, o_w))
             sys.exit("Error: Layer parameters (receptive fiels, stride, padding) does not fit " +
                      "the input volume.")
         elif(f_h > i_h or f_w > i_w):

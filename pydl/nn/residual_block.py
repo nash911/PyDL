@@ -47,7 +47,8 @@ class ResidualBlock(Layer):
             self._skip_convolution = \
                 Conv(self._skip_connect, receptive_field=(1,1), num_filters=block_out_shape[0],
                      zero_padding=0, stride=self._block_layers[0].stride, name='Skip_Conv',
-                     weight_scale=1.0, xavier=True, activation_fn='Linear', batchnorm=True)
+                     weight_scale=1.0, xavier=True, activation_fn='Linear', batchnorm=True,
+                     force_adjust_output_shape=True)
         else:
             self._skip_convolution = None
 

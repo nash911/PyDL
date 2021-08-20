@@ -16,11 +16,25 @@ from pydl.nn.conv import Conv
 from pydl import conf
 
 class TestConv(unittest.TestCase):
-    def unroll_input_volume(self, inp, w, batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad, strd):
+    def unroll_input_volume(self, inp, w, batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad, strd,
+                            frc_adjust=False):
         input_padded = np.pad(inp, ((0,0),(0,0),(pad[0],pad[1]),(pad[0],pad[1])), 'constant') \
                        if np.sum(pad) > 0 else inp
-        out_h = int((inp_h - k_h + np.sum(pad)) / strd) + 1
-        out_w = int((inp_w - k_w + np.sum(pad)) / strd) + 1
+        out_h = ((inp_h - k_h + np.sum(pad)) / strd) + 1
+        out_w = ((inp_w - k_w + np.sum(pad)) / strd) + 1
+        if frc_adjust:
+            if k_h == 1 or strd % 2 == 1:
+                out_h = np.floor(out_h)
+            else:
+                out_h = np.ceil(out_h)
+
+            if k_w == 1 or strd % 2 == 1:
+                out_w = np.floor(out_w)
+            else:
+                out_w = np.ceil(out_w)
+
+        out_h = int(out_h)
+        out_w = int(out_w)
         out_rows = out_h * out_w
         out_cols = w[0].size
         unrolled_inp_shape = tuple((batch, out_rows, out_cols))
@@ -40,16 +54,18 @@ class TestConv(unittest.TestCase):
 
     def test_score_fn(self):
         def test(inp, w, true_out, bias=False, pad=(0,0), stride=1, rcp_field=None,
-                 num_filters=None):
+                 num_filters=None, frc_adjust=False):
             if true_out is None:
                 with npt.assert_raises(SystemExit):
-                    conv = Conv(inp, zero_padding=pad, stride=stride, weights=w, bias=bias)
+                    conv = Conv(inp, zero_padding=pad, stride=stride, weights=w, bias=bias,
+                                force_adjust_output_shape=frc_adjust)
                     out_volume = conv.score_fn(inp)
             else:
                 if pad[0] == pad[1]:
                     pad = pad[0]
                 conv = Conv(inp, receptive_field=rcp_field, num_filters=num_filters,
-                            zero_padding=pad, stride=stride, weights=w, bias=bias)
+                            zero_padding=pad, stride=stride, weights=w, bias=bias,
+                            force_adjust_output_shape=frc_adjust)
                 conv.weights = w
                 conv.bias = bias
                 out_volume = conv.score_fn(inp)
@@ -119,10 +135,12 @@ class TestConv(unittest.TestCase):
         padding_0 = [0, 1, 2]
         padding_1 = [0, 1, 2]
         stride = [1, 2, 3]
+        force_adjust = [True, False]
 
-        for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd in \
+        for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd, force in \
             list(itertools.product(batch_size, inp_depth, inp_height, inp_width, num_kernals,
-                                   kernal_height, kernal_width, padding_0, padding_1, stride)):
+                                   kernal_height, kernal_width, padding_0, padding_1, stride,
+                                   force_adjust)):
             X = np.random.uniform(-1, 1, (batch, dep, inp_h, inp_w))
             w = np.random.randn(num_k, dep, k_h, k_w) * 1.0
             bias = np.random.rand(num_k)
@@ -131,31 +149,40 @@ class TestConv(unittest.TestCase):
             out_height = (inp_h - k_h + np.sum(pad))/strd + 1
             out_width = (inp_w - k_w + np.sum(pad))/strd + 1
 
-            if (out_height % 1 != 0 or out_width % 1 != 0):
-                true_out = None
-            elif (k_h > inp_h or k_w > inp_w):
-                true_out = None
-            elif pad_1 == 0  and pad_0 > 0:
+            if (k_h > inp_h or k_w > inp_w):
                 continue
-            else:
-                unrolled_inp = self.unroll_input_volume(X, w, batch, dep, inp_h, inp_w, num_k,
-                                                        k_h, k_w, pad, strd)
-                # Using dot product for calculating weighted sum
-                weighted_sum = np.matmul(unrolled_inp, w.reshape(num_k, -1).T) + bias
-                true_out = weighted_sum.transpose(0, 2, 1).reshape(-1, num_k, int(out_height),
-                                                                   int(out_width))
+            elif (out_height % 1 != 0 or out_width % 1 != 0):
+                if not force:
+                    continue
+                else:
+                    if np.sum(pad) > 0:
+                        continue
+                    elif strd == 1:
+                        continue
+            elif pad_1 == 0 and pad_0 > 0:
+                continue
+            elif force and np.sum(pad) > 0:
+                continue
+
+            unrolled_inp = self.unroll_input_volume(X, w, batch, dep, inp_h, inp_w, num_k,
+                                                    k_h, k_w, pad, strd)
+            # Using dot product for calculating weighted sum
+            weighted_sum = np.matmul(unrolled_inp, w.reshape(num_k, -1).T) + bias
+            true_out = weighted_sum.transpose(0, 2, 1).reshape(-1, num_k, int(out_height),
+                                                               int(out_width))
 
             test(X, w, true_out, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
-                 num_filters=num_k)
+                 num_filters=num_k, frc_adjust=force)
 
 
     def test_forward(self):
         def test(inp, w, true_out, bias=False, pad=(0,0), stride=1, rcp_field=None, num_filters=None,
-                 actv_fn='ReLU', bchnorm=False, p=None, mask=None):
+                 actv_fn='ReLU', bchnorm=False, p=None, mask=None, frc_adjust=False):
             if pad[0] == pad[1]:
                 pad = pad[0]
             conv = Conv(inp, receptive_field=rcp_field, num_filters=num_filters, zero_padding=pad,
-                        stride=stride, activation_fn=actv_fn, batchnorm=bchnorm, dropout=p)
+                        stride=stride, activation_fn=actv_fn, batchnorm=bchnorm, dropout=p,
+                        force_adjust_output_shape=frc_adjust)
             conv.weights = w
             conv.bias = bias
             out_volume = conv.forward(inp, mask=mask)
@@ -176,11 +203,12 @@ class TestConv(unittest.TestCase):
         stride = [1, 2, 3]
         batchnorm = [True, False]
         dropout = [True, False]
+        force_adjust = [True, False]
 
-        for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd, bn, dout in \
+        for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd, bn, dout, force in \
             list(itertools.product(batch_size, inp_depth, inp_height, inp_width, num_kernals,
                                    kernal_height, kernal_width, padding_0, padding_1, stride,
-                                   batchnorm, dropout)):
+                                   batchnorm, dropout, force_adjust)):
             X = np.random.uniform(-1, 1, (batch, dep, inp_h, inp_w))
             w = np.random.randn(num_k, dep, k_h, k_w) * 1.0
             bias = np.random.rand(num_k)
@@ -189,20 +217,28 @@ class TestConv(unittest.TestCase):
             out_height = (inp_h - k_h + np.sum(pad))/strd + 1
             out_width = (inp_w - k_w + np.sum(pad))/strd + 1
 
-            if (out_height % 1 != 0 or out_width % 1 != 0):
+            if (k_h > inp_h or k_w > inp_w):
                 continue
-            elif (k_h > inp_h or k_w > inp_w):
+            elif (out_height % 1 != 0 or out_width % 1 != 0):
+                if not force:
+                    continue
+                else:
+                    if np.sum(pad) > 0:
+                        continue
+                    elif strd == 1:
+                        continue
+            elif pad_1 == 0 and pad_0 > 0:
                 continue
-            elif pad_1 == 0  and pad_0 > 0:
+            elif force and np.sum(pad) > 0:
                 continue
-            else:
-                unrolled_inp = self.unroll_input_volume(X, w, batch, dep, inp_h, inp_w, num_k,
-                                                        k_h, k_w, pad, strd)
 
-                # Using element-wise multiplication with broadcasting for calculating weighted sum
-                weighted_sum = unrolled_inp[:,np.newaxis,:,:] * w.reshape(num_k, 1, -1)
-                weighted_sum = np.sum(weighted_sum, axis=-1, keepdims=False) + bias.reshape(-1, 1)
-                score = weighted_sum.reshape(-1, num_k, int(out_height), int(out_width))
+            unrolled_inp = self.unroll_input_volume(X, w, batch, dep, inp_h, inp_w, num_k,
+                                                    k_h, k_w, pad, strd, force)
+
+            # Using element-wise multiplication with broadcasting for calculating weighted sum
+            weighted_sum = unrolled_inp[:,np.newaxis,:,:] * w.reshape(num_k, 1, -1)
+            weighted_sum = np.sum(weighted_sum, axis=-1, keepdims=False) + bias.reshape(-1, 1)
+            score = weighted_sum.reshape(-1, num_k, int(out_height), int(out_width))
 
             if bn:
                 score = (score - np.mean(score, axis=0)) / np.sqrt(np.var(score, axis=0) + 1e-32)
@@ -218,20 +254,20 @@ class TestConv(unittest.TestCase):
             if dout:
                 true_out_tanh *= mask
             test(X, w, true_out_tanh, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
-                 num_filters=num_k, actv_fn='Tanh', bchnorm=bn, p=p, mask=mask)
+                 num_filters=num_k, actv_fn='Tanh', bchnorm=bn, p=p, mask=mask, frc_adjust=force)
 
             true_out_relu = np.maximum(0, score)
             if dout:
                 mask /= p
                 true_out_relu *= mask
             test(X, w, true_out_relu, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
-                 num_filters=num_k, actv_fn='ReLU', bchnorm=bn, p=p, mask=mask)
+                 num_filters=num_k, actv_fn='ReLU', bchnorm=bn, p=p, mask=mask, frc_adjust=force)
 
             true_out_linear = score
             if dout:
                 true_out_linear *= mask
             test(X, w, true_out_linear, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
-                 num_filters=num_k, actv_fn='Linear', bchnorm=bn, p=p, mask=mask)
+                 num_filters=num_k, actv_fn='Linear', bchnorm=bn, p=p, mask=mask, frc_adjust=force)
 
 
     def test_backward_gradients_finite_difference(self):
@@ -337,12 +373,13 @@ class TestConv(unittest.TestCase):
         activation_fn = ['Linear', 'Tanh', 'ReLU']
         batchnorm = [True, False]
         dropout = [True, False]
+        force_adjust = [True, False]
         scale = [1e-0]
 
         for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd, unit, actv, bn, dout, \
-            scl in list(itertools.product(batch_size, inp_depth, inp_height, inp_width, num_kernals,
-                                          kernal_height, kernal_width, padding_0, padding_1, stride,
-                                          unit_inp_grad, activation_fn, batchnorm, dropout, scale)):
+            force, scl in list(itertools.product(batch_size, inp_depth, inp_height, inp_width,
+            num_kernals, kernal_height, kernal_width, padding_0, padding_1, stride, unit_inp_grad,
+            activation_fn, batchnorm, dropout, force_adjust, scale)):
             X = np.random.uniform(-scl, scl, (batch, dep, inp_h, inp_w))
             w = np.random.randn(num_k, dep, k_h, k_w) * scl
             bias = np.random.rand(num_k) * scl
@@ -351,15 +388,23 @@ class TestConv(unittest.TestCase):
             out_height = (inp_h - k_h + np.sum(pad))/strd + 1
             out_width = (inp_w - k_w + np.sum(pad))/strd + 1
 
-            if (out_height % 1 != 0 or out_width % 1 != 0):
+            if (k_h > inp_h or k_w > inp_w):
                 continue
-            elif (k_h > inp_h or k_w > inp_w):
+            elif (out_height % 1 != 0 or out_width % 1 != 0):
+                if not force:
+                    continue
+                else:
+                    if np.sum(pad) > 0:
+                        continue
+                    elif strd == 1:
+                        continue
+            elif pad_1 == 0 and pad_0 > 0:
                 continue
-            elif pad_1 == 0  and pad_0 > 0:
+            elif force and np.sum(pad) > 0:
                 continue
-            else:
-                out_height = int(out_height)
-                out_width = int(out_width)
+
+            out_height = int(out_height)
+            out_width = int(out_width)
 
             inp_grad = np.ones((batch, num_k, out_height, out_width), dtype=conf.dtype) if unit \
                        else np.random.uniform(-1, 1, (batch, num_k, out_height, out_width))
