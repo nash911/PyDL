@@ -234,8 +234,10 @@ class Training(ABC):
             # ones = np.ones_like(sum_probs)
             self._class_prob = prob
 
-        # -ln(σ(z))
-        neg_ln_prob = -np.log(self._class_prob)
+        with np.errstate(divide='ignore'):
+            # -ln(σ(z))
+            neg_ln_prob = -np.log(self._class_prob)
+            neg_ln_prob = np.nan_to_num(neg_ln_prob)
 
         if self._nn is not None and self._lambda > 0:
             nn_weights = self._nn.weights
@@ -252,6 +254,9 @@ class Training(ABC):
             y = np.argmax(y, axis=-1)
 
         # Cross-Entropy Cost Fn.
+        #          m k               1
+        # L(p,y) = ∑ ∑-ln(pᵢ) * yᵢ + - λ∑(θⱼ)²
+        #            i               2  j
         return np.mean(neg_ln_prob[range(y.size), y]) + regularization_loss
 
 
@@ -268,7 +273,7 @@ class Training(ABC):
             y = np.argmax(y, axis=-1)
 
         loss_grad = np.zeros_like(self._class_prob)
-        loss_grad[range(y.size), y] = (-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
+        loss_grad[range(y.size), y] = np.nan_to_num(-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
 
         self._class_prob = None
         return loss_grad
@@ -342,6 +347,7 @@ class Training(ABC):
 
         batch_l = list()
         for i in range(num_batches):
+            # print("Inference -- Batch: %d" % (i))
             start = int(batch_size * i)
             if i == num_batches-1:
                 end = X.shape[0]
@@ -475,6 +481,7 @@ class Training(ABC):
 
         for e in range(epochs):
             for i in range(num_batches):
+                # print("Epoch: %d -- Batch: %d" % (e, i))
                 start = int(batch_size * i)
                 if i == num_batches-1:
                     end = self._train_X.shape[0]
