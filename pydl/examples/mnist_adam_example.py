@@ -16,6 +16,7 @@ from pydl.nn.nn import NN
 from pydl.training.training import Adam
 from pydl import conf
 
+
 def main():
     mnist = fetch_openml('mnist_784')
     X = np.array(mnist.data, dtype=conf.dtype)
@@ -53,7 +54,7 @@ def main():
     layers = [l1, l2, l3, l4, l5, l6]
 
     nn = NN(X, layers)
-    adam = Adam(nn, step_size=1e-3, beta_1=0.9,  beta_2=0.999, reg_lambda=1e-1, train_size=60000,
+    adam = Adam(nn, step_size=1e-3, beta_1=0.9, beta_2=0.999, reg_lambda=1e-1, train_size=60000,
                 test_size=10000)
     adam.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot='MNIST - Adam',
                log_freq=1)

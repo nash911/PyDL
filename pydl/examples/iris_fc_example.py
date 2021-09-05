@@ -16,7 +16,7 @@ from pydl.training.training import SGD
 from pydl.training.training import Momentum
 from pydl.training.training import RMSprop
 from pydl.training.training import Adam
-from pydl import conf
+
 
 def main():
     iris = datasets.load_iris()
@@ -34,7 +34,7 @@ def main():
     print("Data STD: ", np.std(X, axis=0))
 
     # SoftMax Cross Entropy
-    l1 = FC(X, num_neurons=int(X.shape[-1]*2), bias=True, weight_scale=1.0, xavier=False,
+    l1 = FC(X, num_neurons=int(X.shape[-1] * 2), bias=True, weight_scale=1.0, xavier=False,
             activation_fn='ReLU')
     l2 = FC(l1, num_neurons=int(X.shape[-1]), bias=True, weight_scale=0.01, xavier=False,
             activation_fn='Tanh')
@@ -63,7 +63,7 @@ def main():
     adam.train(X, y, normalize='pca', dims=2, epochs=50000, y_onehot=False, plot='Adam - PCA')
 
     # Sigmoid Cross Entropy
-    l1 = FC(X, num_neurons=int(X.shape[-1]*2), bias=True, weight_scale=1.0, xavier=True,
+    l1 = FC(X, num_neurons=int(X.shape[-1] * 2), bias=True, weight_scale=1.0, xavier=True,
             activation_fn='ReLU')
     l2 = FC(l1, num_neurons=int(X.shape[-1]), bias=True, weight_scale=1.0, xavier=True,
             activation_fn='Tanh')

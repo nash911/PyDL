@@ -16,6 +16,7 @@ from pydl.nn.nn import NN
 from pydl.training.training import Momentum
 from pydl import conf
 
+
 def main():
     mnist = fetch_openml('mnist_784')
     X = np.array(mnist.data, dtype=conf.dtype)

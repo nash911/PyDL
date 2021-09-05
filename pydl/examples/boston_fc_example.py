@@ -13,10 +13,8 @@ from sklearn import datasets
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
 from pydl.training.training import SGD
-from pydl.training.training import Momentum
-from pydl.training.training import RMSprop
 from pydl.training.training import Adam
-from pydl import conf
+
 
 def main():
     boston = datasets.load_boston()
@@ -33,7 +31,7 @@ def main():
     print("Data STD: ", np.std(X, axis=0))
 
     # Regression NN
-    l1 = FC(X, num_neurons=int(X.shape[-1]*5), bias=True, weight_scale=1.0, xavier=True,
+    l1 = FC(X, num_neurons=int(X.shape[-1] * 5), bias=True, weight_scale=1.0, xavier=True,
             dropout=0.5, activation_fn='ReLU')
     l2 = FC(l1, num_neurons=int(l1.shape[-1]), bias=True, weight_scale=1.0, xavier=True,
             dropout=1.0, activation_fn='Tanh')

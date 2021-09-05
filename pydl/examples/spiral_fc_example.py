@@ -16,19 +16,19 @@ from pydl.training.training import SGD
 from pydl.training.training import Momentum
 from pydl.training.training import RMSprop
 from pydl.training.training import Adam
-from pydl import conf
+
 
 def main():
-    N = 100 # number of points per class
-    D = 2 # dimensionality
-    K = 3 # number of classes
-    X = np.zeros((N*K,D)) # data matrix (each row = single example)
-    y = np.zeros(N*K, dtype='uint8') # class labels
+    N = 100  # number of points per class
+    D = 2  # dimensionality
+    K = 3  # number of classes
+    X = np.zeros((N * K, D))  # data matrix (each row = single example)
+    y = np.zeros(N * K, dtype='uint8')  # class labels
     for j in range(K):
-        ix = range(N*j,N*(j+1))
-        r = np.linspace(0.0,1,N) # radius
-        t = np.linspace(j*4,(j+1)*4,N) + np.random.randn(N)*0.2 # theta
-        X[ix] = np.c_[r*np.sin(t), r*np.cos(t)]
+        ix = range(N * j, N * (j + 1))
+        r = np.linspace(0.0, 1, N)  # radius
+        t = np.linspace(j * 4, (j + 1) * 4, N) + np.random.randn(N) * 0.2  # theta
+        X[ix] = np.c_[r * np.sin(t), r * np.cos(t)]
         y[ix] = j
 
     # Data Stats
@@ -55,7 +55,7 @@ def main():
     nn_a = NN(X, layers_a)
     sgd = SGD(nn_a, step_size=1e-2, reg_lambda=1e-3)
     sgd.train(X, y, normalize='mean', batch_size=256, epochs=20000, y_onehot=False,
-              plot='SGD - Softmax')
+              log_freq=100, plot='SGD - Softmax')
 
     # Sigmoid Cross Entropy - Momentum
     l1_b = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
@@ -64,7 +64,8 @@ def main():
 
     nn_b = NN(X, layers_b)
     momentum = Momentum(nn_b, step_size=1e-2, mu=0.5, reg_lambda=1e-3)
-    momentum.train(X, y, batch_size=256, epochs=20000, y_onehot=False, plot='Momentum - Sigmoid')
+    momentum.train(X, y, batch_size=256, epochs=20000, y_onehot=False, log_freq=100,
+                   plot='Momentum - Sigmoid')
 
     # Sigmoid Cross Entropy - RMSprop
     l1_c = FC(X, num_neurons=int(100), bias=True, activation_fn='ReLU')
@@ -73,7 +74,8 @@ def main():
 
     nn_c = NN(X, layers_c)
     rms = RMSprop(nn_c, step_size=1e-2, beta=0.999, reg_lambda=1e-3)
-    rms.train(X, y, batch_size=256, epochs=20000, y_onehot=False, plot='RMSprop - Sigmoid')
+    rms.train(X, y, batch_size=256, epochs=20000, y_onehot=False, log_freq=100,
+              plot='RMSprop - Sigmoid')
 
     # Softmax Cross Entropy - Adam
     l1_d = FC(X, num_neurons=int(100), bias=True, activation_fn='Tanh')
@@ -82,7 +84,8 @@ def main():
 
     nn_d = NN(X, layers_d)
     adam = Adam(nn_d, beta_1=0.9, beta_2=0.999, step_size=1e-3, reg_lambda=1e-3)
-    adam.train(X, y, batch_size=256, epochs=20000, y_onehot=False, plot='Adam - SoftMax')
+    adam.train(X, y, batch_size=256, epochs=20000, y_onehot=False, log_freq=100,
+               plot='Adam - SoftMax')
 
     input("Press Enter to continue...")
 
