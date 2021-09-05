@@ -9,7 +9,6 @@
 
 import numpy as np
 import sys
-import warnings
 
 from pydl.nn.layers import Layer
 from pydl.nn.activations import Linear
@@ -21,25 +20,24 @@ from pydl.nn.batchnorm import BatchNorm
 from pydl.nn.dropout import Dropout
 from pydl import conf
 
-activations = {'linear' : Linear,
-               'sigmoid' : Sigmoid,
-               'tanh' : Tanh,
-               'softmax' : SoftMax,
-               'relu' : ReLU
-              }
+activations = {'linear': Linear,
+               'sigmoid': Sigmoid,
+               'tanh': Tanh,
+               'softmax': SoftMax,
+               'relu': ReLU
+               }
 
 
 class Conv(Layer):
-    """The Convolution Layer Class
-    """
+    """The Convolution Layer Class."""
 
     def __init__(self, inputs, receptive_field=None, num_filters=None, zero_padding=0, stride=1,
                  weights=None, bias=True, weight_scale=1.0, xavier=True, activation_fn='ReLU',
                  batchnorm=False, dropout=None, force_adjust_output_shape=False, name='ConvLayer'):
         super().__init__(name=name)
         self._type = 'Convolution_Layer'
-        self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
-        self._receptive_field = receptive_field # Filter's (height, width)
+        self._inp_shape = inputs.shape[1:]  # Input volume --> [depth, height, width]
+        self._receptive_field = receptive_field  # Filter's (height, width)
         self._num_filters = num_filters
         self._stride = stride
         self._weight_scale = weight_scale
@@ -49,9 +47,9 @@ class Conv(Layer):
 
         # Initialize Zero Padding dims
         if type(zero_padding) == int:
-            self._zero_padding = tuple((zero_padding,zero_padding))
-        elif type(zero_padding) == tuple :
-            if zero_padding[1] == 0  and zero_padding[0] > 0:
+            self._zero_padding = tuple((zero_padding, zero_padding))
+        elif type(zero_padding) == tuple:
+            if zero_padding[1] == 0 and zero_padding[0] > 0:
                 sys.exit("Error: Second dimension of Zerro-Padding must be greater than zero.")
             self._zero_padding = zero_padding
         else:
@@ -66,7 +64,8 @@ class Conv(Layer):
         # Initialize Weights
         self.init_weights(weights)
 
-        # Check if the hyperparameter are valid for the given input volume, and set output volume shape
+        # Check if the hyperparameter are valid for the given input volume, and set output
+        # volume shape
         self.set_output_volume_shape()
 
         # Calculate unroll indices of input volume
@@ -83,14 +82,9 @@ class Conv(Layer):
 
         if batchnorm:
             self._batchnorm = BatchNorm(feature_size=self._out_shape[1:])
-        else:
-            self._batchnorm = None
 
         if dropout is not None and dropout < 1.0:
             self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
-        else:
-            self._dropout = None
-
 
     # Getters
     # -------
@@ -134,7 +128,6 @@ class Conv(Layer):
     def stride(self):
         return self._stride
 
-
     # Setters
     # -------
     @weights.setter
@@ -147,10 +140,9 @@ class Conv(Layer):
         try:
             assert(b.shape == self._bias.shape)
             self._bias = b
-        except:
+        except AssertionError:
             assert(b.size == self._bias.size)
             self._bias = b.reshape(-1, 1)
-
 
     def init_weights(self, weights):
         # Initialize Weights
@@ -189,17 +181,16 @@ class Conv(Layer):
             self._filter_size = np.prod(self._filter_shape)
 
             # Initialize weights from a normal distribution
-            self._weights = np.random.randn(self._num_filters, *self._filter_shape) * \
-                            self._weight_scale
+            self._weights = \
+                np.random.randn(self._num_filters, *self._filter_shape) * self._weight_scale
 
             if self._xavier:
                 # Apply Xavier Initialization
                 if self._activation_fn.type.lower() == 'relu':
-                    norm_fctr = np.sqrt(self._filter_size/2.0)
+                    norm_fctr = np.sqrt(self._filter_size / 2.0)
                 else:
                     norm_fctr = np.sqrt(self._filter_size)
                 self._weights /= norm_fctr
-
 
     def reinitialize_weights(self):
         # Initialize weights from a normal distribution
@@ -208,7 +199,7 @@ class Conv(Layer):
         if self._xavier:
             # Apply Xavier Initialization
             if self._activation_fn.type.lower() == 'relu':
-                norm_fctr = np.sqrt(self._filter_size/2.0)
+                norm_fctr = np.sqrt(self._filter_size / 2.0)
             else:
                 norm_fctr = np.sqrt(self._filter_size)
             self._weights /= norm_fctr
@@ -218,7 +209,6 @@ class Conv(Layer):
 
         if self._batchnorm is not None:
             self._batchnorm.reinitialize_params(feature_size=self._out_shape[1:])
-
 
     def set_output_volume_shape(self):
         i_h = self._inp_shape[1]
@@ -257,16 +247,15 @@ class Conv(Layer):
             self._out_shape = tuple((None, self._num_filters, int(o_h), int(o_w)))
             self._out_size = np.prod(self._out_shape[1:])
 
-
-    def calculate_unroll_indices(self): # Conv-Algo-5
+    def calculate_unroll_indices(self):  # Conv-Algo-5
         inp_d = self._inp_shape[0]
         inp_h = self._inp_shape[1]
         inp_w = self._inp_shape[2]
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
 
-        window_row_inds = inp_h - (ker_h-1) + np.sum(self._zero_padding)
-        window_col_inds = inp_w - (ker_w-1) + np.sum(self._zero_padding)
+        window_row_inds = inp_h - (ker_h - 1) + np.sum(self._zero_padding)
+        window_col_inds = inp_w - (ker_w - 1) + np.sum(self._zero_padding)
 
         out_h = int((inp_h - ker_h + np.sum(self._zero_padding)) / self._stride) + 1
         out_w = int((inp_w - ker_w + np.sum(self._zero_padding)) / self._stride) + 1
@@ -277,21 +266,22 @@ class Conv(Layer):
         c0 = np.tile(np.arange(ker_w), ker_h)
         c1 = np.tile(np.arange(window_col_inds, step=self._stride), out_h)
 
-        r = r0.reshape(-1,1) + r1.reshape(1,-1)
-        c = c0.reshape(-1,1) + c1.reshape(1,-1)
+        r = r0.reshape(-1, 1) + r1.reshape(1, -1)
+        c = c0.reshape(-1, 1) + c1.reshape(1, -1)
 
         self._row_inds = np.tile(r, reps=(inp_d, 1))
         self._col_inds = np.tile(c, reps=(inp_d, 1))
 
-        self._slice_inds = np.tile(np.repeat(np.arange(inp_d), ker_h*ker_w), reps=(out_h*out_w, 1)).T
-
+        self._slice_inds = \
+            np.tile(np.repeat(np.arange(inp_d), ker_h * ker_w), reps=(out_h * out_w, 1)).T
 
     def score_fn(self, inputs, weights=None):
         # Zero-pad input volume based on the setting
         if np.sum(self._zero_padding) > 0:
             pad_0 = self._zero_padding[0]
             pad_1 = self._zero_padding[1]
-            padded_inputs = np.pad(inputs, ((0,0),(0,0),(pad_0,pad_1),(pad_0,pad_1)), 'constant')
+            padded_inputs = \
+                np.pad(inputs, ((0, 0), (0, 0), (pad_0, pad_1), (pad_0, pad_1)), 'constant')
         else:
             padded_inputs = inputs
 
@@ -316,7 +306,6 @@ class Conv(Layer):
 
         return weighted_sum_reshaped
 
-
     def weight_gradients(self, inp_grad, reg_lambda=0, inputs=None, summed=True):
         if inputs is not None:
             self._unrolled_inputs = inputs
@@ -325,17 +314,16 @@ class Conv(Layer):
         batch = inp_grad.shape[0]
 
         # dy/dw: Gradient of the layer activation 'y' w.r.t the weights 'w'
-        grad = self._unrolled_inputs[:,np.newaxis,:,:] * \
-               inp_grad.reshape(batch, self._num_filters, 1, -1)
+        grad = self._unrolled_inputs[:, np.newaxis, :, :] * \
+            inp_grad.reshape(batch, self._num_filters, 1, -1)
 
         if summed:
-            grad = np.sum(grad, axis=(0,3), keepdims=False)
+            grad = np.sum(grad, axis=(0, 3), keepdims=False)
             grad = grad.reshape(self._num_filters, *self._filter_shape)
 
         if reg_lambda > 0:
             grad += (reg_lambda * self._weights)
         return grad
-
 
     def bias_gradients(self, inp_grad, summed=True):
         if not self._has_bias:
@@ -344,9 +332,8 @@ class Conv(Layer):
             # dy/db: Gradient of the layer activation 'y' w.r.t the bias 'b'
             grad = inp_grad
             if summed:
-                grad = np.sum(grad, axis=(0,2,3), keepdims=False).reshape(-1, 1)
+                grad = np.sum(grad, axis=(0, 2, 3), keepdims=False).reshape(-1, 1)
             return grad
-
 
     def input_gradients(self, inp_grad, summed=True):  # Conv-Bck-Algo-4
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
@@ -357,7 +344,7 @@ class Conv(Layer):
 
         # weight * inp_grads
         w_inp_grad = self._weights.reshape(self._num_filters, -1, 1) * \
-                     inp_grad.reshape(batch_size, self._num_filters, 1, -1)
+            inp_grad.reshape(batch_size, self._num_filters, 1, -1)
         w_inp_grad = np.sum(w_inp_grad, axis=1, keepdims=False)
 
         batch_inds = np.arange(batch_size).reshape(-1, 1, 1)
@@ -368,10 +355,9 @@ class Conv(Layer):
         if np.sum(self._zero_padding) > 0:
             pad_0 = self._zero_padding[0]
             pad_1 = self._zero_padding[1]
-            out_grads = out_grads[:,:,pad_0:-pad_1,pad_0:-pad_1]
+            out_grads = out_grads[:, :, pad_0:-pad_1, pad_0:-pad_1]
 
         return out_grads
-
 
     def forward(self, inputs, inference=False, mask=None):
         # Sum of weighted inputs
@@ -386,23 +372,22 @@ class Conv(Layer):
 
         # Dropout
         if self._dropout is not None:
-            if not inference: # Training step
+            if not inference:  # Training step
                 # Apply Dropout Mask
                 output = self._dropout.forward(output, mask if self.dropout_mask is None
-                                                     else self.dropout_mask)
-            else: # Inference
-                 if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
-                     output *= self.dropout.p
-                 else: # Activation Fn. ∈ {'Linear', 'ReLU'}
-                     pass # Do nothing - Inverse Dropout
+                                               else self.dropout_mask)
+            else:  # Inference
+                if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
+                    output *= self.dropout.p
+                else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
+                    pass  # Do nothing - Inverse Dropout
 
         return output
 
-
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
-        if len(inp_grad.shape) > 2: # The proceeding layer is a Convolution/Pooling layer
+        if len(inp_grad.shape) > 2:  # The proceeding layer is a Convolution/Pooling layer
             pass
-        else: # The proceeding layer is a FC layer
+        else:  # The proceeding layer is a FC layer
             # Reshape incoming gradients accordingly
             inp_grad = inp_grad.reshape(-1, *self._out_shape[1:])
 
@@ -425,7 +410,6 @@ class Conv(Layer):
 
         out_grad = self.input_gradients(batch_grad)
         return out_grad
-
 
     def update_weights(self, alpha):
         if self._batchnorm is not None:

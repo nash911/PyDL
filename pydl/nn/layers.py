@@ -20,16 +20,17 @@ from pydl.nn.batchnorm import BatchNorm
 from pydl.nn.dropout import Dropout
 from pydl import conf
 
-activations = {'linear' : Linear,
-               'sigmoid' : Sigmoid,
-               'tanh' : Tanh,
-               'softmax' : SoftMax,
-               'relu' : ReLU
-              }
+activations = {'linear': Linear,
+               'sigmoid': Sigmoid,
+               'tanh': Tanh,
+               'softmax': SoftMax,
+               'relu': ReLU
+               }
 
 
 class Layer(ABC):
     """An abstract class defining the interface of the Layer.
+
     Args:
         name (str): Name of the layer.
     """
@@ -47,6 +48,8 @@ class Layer(ABC):
         self._bias_grad = None
         self._out_grad = None
 
+        self._batchnorm = None
+        self._dropout = None
         self._dropout_mask = None
 
     # Getters
@@ -145,9 +148,14 @@ class Layer(ABC):
     def update_weights(self, alpha):
         pass
 
+    # Default Methods
+    # ---------------
+    def reset(self):
+        pass
+
+
 class FC(Layer):
-    """The Hidden Layer Class
-    """
+    """The Hidden Layer Class."""
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, weight_scale=1.0,
                  xavier=True, activation_fn='Sigmoid', batchnorm=False, dropout=None, name=None):
@@ -171,7 +179,7 @@ class FC(Layer):
             if xavier:
                 # Apply Xavier Initialization
                 if self._activation_fn.type.lower() == 'relu':
-                    norm_fctr = np.sqrt(self._inp_size/2.0)
+                    norm_fctr = np.sqrt(self._inp_size / 2.0)
                 else:
                     norm_fctr = np.sqrt(self._inp_size)
                 self._weights /= norm_fctr
@@ -185,14 +193,9 @@ class FC(Layer):
 
         if batchnorm:
             self._batchnorm = BatchNorm(feature_size=self._num_neurons)
-        else:
-            self._batchnorm = None
 
         if dropout is not None and dropout < 1.0:
             self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
-        else:
-            self._dropout = None
-
 
     # Getters
     # -------
@@ -208,7 +211,6 @@ class FC(Layer):
     def num_neurons(self):
         return self._num_neurons
 
-
     def reinitialize_weights(self, inputs=None, num_neurons=None):
         num_feat = self._inp_size if inputs is None else inputs.shape[-1]
         num_neurons = self._num_neurons if num_neurons is None else num_neurons
@@ -218,7 +220,7 @@ class FC(Layer):
         if self._xavier:
             # Apply Xavier Initialization
             if self._activation_fn.type.lower() == 'relu':
-                norm_fctr = np.sqrt(num_feat/2.0)
+                norm_fctr = np.sqrt(num_feat / 2.0)
             else:
                 norm_fctr = np.sqrt(num_feat)
             self._weights /= norm_fctr
@@ -232,7 +234,6 @@ class FC(Layer):
 
         if self._batchnorm is not None:
             self._batchnorm.reinitialize_params(feature_size=num_neurons)
-
 
     def score_fn(self, inputs, weights=None):
         self._inputs = inputs
@@ -252,7 +253,7 @@ class FC(Layer):
         assert(self._inputs is not None)
 
         # dy/dw: Gradient of the layer activation 'y' w.r.t the weights 'w'
-        grad = self._inputs[:,:,np.newaxis] * inp_grad[:,np.newaxis,:]
+        grad = self._inputs[:, :, np.newaxis] * inp_grad[:, np.newaxis, :]
         if summed:
             grad = np.sum(grad, axis=0, keepdims=False)
 
@@ -272,17 +273,17 @@ class FC(Layer):
 
     def input_gradients(self, inp_grad, summed=True):
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
-        grad = self._weights[np.newaxis,:,:] * inp_grad[:,np.newaxis,:]
+        grad = self._weights[np.newaxis, :, :] * inp_grad[:, np.newaxis, :]
         if summed:
             grad = np.sum(grad, axis=-1, keepdims=False)
         return grad
 
     def forward(self, inputs, inference=False, mask=None):
-        if len(inputs.shape) > 2: # The preceeding layer is a Convolution/Pooling layer or 3D inputs
+        if len(inputs.shape) > 2:  # Preceeding layer is a Convolution/Pooling layer or 3D inputs
             # Unroll inputs
             batch_size = inputs.shape[0]
             self._inputs = inputs.reshape(batch_size, -1)
-        else: # The preceeding layer is a FC layer or 1D inputs
+        else:  # The preceeding layer is a FC layer or 1D inputs
             self._inputs = inputs
 
         # Sum of weighted inputs
@@ -297,15 +298,15 @@ class FC(Layer):
 
         # Dropout
         if self._dropout is not None:
-            if not inference: # Training step
+            if not inference:  # Training step
                 # Apply Dropout Mask
                 self._output = self._dropout.forward(self._output, mask if self.dropout_mask is None
                                                      else self.dropout_mask)
-            else: # Inference
-                 if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
-                     self._output *= self.dropout.p
-                 else: # Activation Fn. ∈ {'Linear', 'ReLU'}
-                     pass # Do nothing - Inverse Dropout
+            else:  # Inference
+                if self._activation_fn.type in ['Sigmoid', 'Tanh', 'SoftMax']:
+                    self._output *= self.dropout.p
+                else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
+                    pass  # Do nothing - Inverse Dropout
 
         return self._output
 

@@ -7,7 +7,7 @@
 # This code is licensed under MIT license (see LICENSE.txt for details)
 # ------------------------------------------------------------------------
 
-from abc import ABC, abstractmethod
+from abc import ABC
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -19,6 +19,7 @@ from pydl import conf
 
 class Training(ABC):
     """An abstract class defining the interface of Training Algorithms.
+
     Args:
         name (str): Name of the training algorithm.
     """
@@ -61,10 +62,9 @@ class Training(ABC):
             self._train_size = int(train_size)
             self._test_size = int(test_size)
 
-        self._train_X =  self._train_y = self._test_X = self._test_y = None
+        self._train_X = self._train_y = self._test_X = self._test_y = None
         self._class_prob = None
         self._prediction_delta = None
-
 
     def mean_normalize(self, X, mean=None, std=None):
         if mean is None:
@@ -75,9 +75,8 @@ class Training(ABC):
             std[std == 0] = 1
 
         mean_centered = X - mean
-        normalized = mean_centered/std
+        normalized = mean_centered / std
         return mean, std, normalized
-
 
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
         if mean is None:
@@ -93,16 +92,15 @@ class Training(ABC):
             U, S, V = np.linalg.svd(cov)
 
         if type(dims) is float and dims <= 1.0:
-            cumulative_ratio = (np.cumsum(S)/np.sum(S)).tolist()
+            cumulative_ratio = (np.cumsum(S) / np.sum(S)).tolist()
             min_ratio = min([i for i in cumulative_ratio if i > dims])
             dims = cumulative_ratio.index(min_ratio)
             print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
-                  (dims+1, (min_ratio)*100.0))
+                  (dims + 1, (min_ratio) * 100.0))
             dims += 1
         elif type(dims) is int and dims >= 1:
             print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
-                  (dims, ((np.cumsum(S)/np.sum(S))[dims-1])*100.0))
-
+                  (dims, ((np.cumsum(S) / np.sum(S))[dims - 1]) * 100.0))
 
         # Project data on to orthogonal subspace
         X_reduced = np.matmul(X, U[:, :dims])
@@ -111,7 +109,6 @@ class Training(ABC):
             X_reduced = X_reduced / np.sqrt(S[:dims] + 1e-4)
 
         return mean, U, S, dims, X_reduced
-
 
     def shuffle_split_data(self, X, y, shuffle=True, train_size=None, test_size=None,
                            y_onehot=False):
@@ -146,7 +143,7 @@ class Training(ABC):
         elif y_onehot and len(y.shape) == 1:
             # Convert labels to one-hot vector
             if self._nn is None:
-                labels = np.zeros((y.size, y.max()+1))
+                labels = np.zeros((y.size, y.max() + 1))
             else:
                 labels = np.zeros((y.size, self._nn.num_classes))
             labels[np.arange(y.size), y] = 1
@@ -162,7 +159,6 @@ class Training(ABC):
 
         return train_X, train_y, test_X, test_y
 
-
     def loss(self, X, y, inference=False, prob=None):
         if self._regression:
             return self.mse_loss(X, y, inference, pred=prob)
@@ -174,7 +170,6 @@ class Training(ABC):
             else:
                 sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
-
     def loss_gradient(self, X, y, inference=False, prob=None):
         if self._regression:
             return self.mse_gradient(X, y, inference)
@@ -185,7 +180,6 @@ class Training(ABC):
                 return self.sigmoid_cross_entropy_gradient(X, y, inference, prob)
             else:
                 sys.exit("Error: Unknown activation_type: ", self._activation_fn)
-
 
     def mse_loss(self, X, y, inference=False, pred=None):
         if pred is None:
@@ -212,7 +206,6 @@ class Training(ABC):
         # MSE Cost Fn.
         return data_loss + regularization_loss
 
-
     def mse_gradient(self, X, y, inference=False):
         if self._prediction_delta is None:
             _ = self._nn.forward(X, inference)
@@ -224,7 +217,6 @@ class Training(ABC):
 
         self._prediction_delta = None
         return loss_grad
-
 
     def softmax_cross_entropy_loss(self, X, y, inference=False, prob=None):
         if prob is None:
@@ -249,7 +241,7 @@ class Training(ABC):
         else:
             regularization_loss = 0
 
-        if len(y.shape) == 2: # y --> OneHot Representation
+        if len(y.shape) == 2:  # y --> OneHot Representation
             # Convert y to class labels
             y = np.argmax(y, axis=-1)
 
@@ -259,7 +251,6 @@ class Training(ABC):
         #            i               2  j
         return np.mean(neg_ln_prob[range(y.size), y]) + regularization_loss
 
-
     def softmax_cross_entropy_gradient(self, X, y, inference=False, prob=None):
         if prob is not None:
             # sum_probs = np.sum(prob, axis=-1, keepdims=True)
@@ -268,16 +259,16 @@ class Training(ABC):
         elif self._class_prob is None:
             self._class_prob = self._nn.forward(X, inference)
 
-        if len(y.shape) == 2: # y --> OneHot Representation
+        if len(y.shape) == 2:  # y --> OneHot Representation
             # Convert y to class labels
             y = np.argmax(y, axis=-1)
 
         loss_grad = np.zeros_like(self._class_prob)
-        loss_grad[range(y.size), y] = np.nan_to_num(-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
+        loss_grad[range(y.size), y] = \
+            np.nan_to_num(-1.0 / self._class_prob[range(y.size), y]) / y.shape[0]
 
         self._class_prob = None
         return loss_grad
-
 
     def sigmoid_cross_entropy_loss(self, X, y, inference=False, prob=None):
         if prob is None:
@@ -292,17 +283,17 @@ class Training(ABC):
             # -ln(1 - σ(z))
             neg_ln_one_mns_prob = -np.log(1.0 - self._class_prob)
 
-        if len(y.shape) == 1: # y --> Class labels
+        if len(y.shape) == 1:  # y --> Class labels
             neg_ln_one_mns_prob[range(y.size), y] = neg_ln_prob[range(y.size), y]
             logistic_probs = neg_ln_one_mns_prob
-        elif len(y.shape) == 2: # y --> OneHot Representation
+        elif len(y.shape) == 2:  # y --> OneHot Representation
             neg_ln_prob = np.nan_to_num(neg_ln_prob)
             neg_ln_one_mns_prob = np.nan_to_num(neg_ln_one_mns_prob)
             if self._binary_classification:
-                logistic_probs = (y * neg_ln_prob) + ((1-y) * neg_ln_one_mns_prob)
+                logistic_probs = (y * neg_ln_prob) + ((1 - y) * neg_ln_one_mns_prob)
             else:
                 neg_ln_prob *= y
-                neg_ln_one_mns_prob *= (1-y)
+                neg_ln_one_mns_prob *= (1 - y)
                 logistic_probs = neg_ln_prob + neg_ln_one_mns_prob
 
         if self._nn is not None and self._lambda > 0:
@@ -318,20 +309,19 @@ class Training(ABC):
         # Logistic Cost Fn.
         return (np.sum(logistic_probs) / y.shape[0]) + regularization_loss
 
-
     def sigmoid_cross_entropy_gradient(self, X, y, inference=False, prob=None):
         if prob is not None:
             self._class_prob = prob
         elif self._class_prob is None:
             self._class_prob = self._nn.forward(X, inference)
 
-        if len(y.shape) == 1: # y --> Class labels
+        if len(y.shape) == 1:  # y --> Class labels
             loss_grad = (1.0 / (1.0 - self._class_prob))
             loss_grad[range(y.size), y] = -1.0 / self._class_prob[range(y.size), y]
-        elif len(y.shape) == 2: # y --> OneHot Representation
+        elif len(y.shape) == 2:  # y --> OneHot Representation
             if self._binary_classification:
                 loss_grad = (y * np.nan_to_num(-1.0 / self._class_prob)) + \
-                            ((1-y) * np.nan_to_num(1.0 / (1.0-self._class_prob)))
+                            ((1 - y) * np.nan_to_num(1.0 / (1.0 - self._class_prob)))
             else:
                 neg_ln_prob_grad = np.nan_to_num(-1.0 / self._class_prob) * y
                 neg_ln_one_mns_prob_grad = np.nan_to_num(1.0 / (1.0 - self._class_prob)) * (1 - y)
@@ -340,16 +330,17 @@ class Training(ABC):
         self._class_prob = None
         return loss_grad / y.shape[0]
 
-    def batch_loss(self, X, y, batch_size=None, inference=True):
+    def batch_loss(self, X, y, batch_size=None, inference=True, log_freq=1):
         if batch_size is None:
             batch_size = X.shape[0]
-        num_batches = int(np.ceil(X.shape[0]/batch_size))
+        num_batches = int(np.ceil(X.shape[0] / batch_size))
 
         batch_l = list()
         for i in range(num_batches):
-            # print("Inference -- Batch: %d" % (i))
+            if log_freq < 0:
+                print("Inference -- Batch: %d" % (i))
             start = int(batch_size * i)
-            if i == num_batches-1:
+            if i == num_batches - 1:
                 end = X.shape[0]
             else:
                 end = start + batch_size
@@ -357,16 +348,15 @@ class Training(ABC):
 
         return np.mean(batch_l)
 
-
     def evaluate(self, X, y, batch_size=None, inference=True):
         if batch_size is None:
             batch_size = X.shape[0]
-        num_batches = int(np.ceil(X.shape[0]/batch_size))
+        num_batches = int(np.ceil(X.shape[0] / batch_size))
 
         test_prob = list()
         for i in range(num_batches):
             start = int(batch_size * i)
-            if i == num_batches-1:
+            if i == num_batches - 1:
                 end = X.shape[0]
             else:
                 end = start + batch_size
@@ -375,28 +365,29 @@ class Training(ABC):
         test_prob = np.vstack(test_prob)
 
         if self._binary_classification:
-            pred = np.array(test_prob >= 1-test_prob, dtype=np.int32)
+            pred = np.array(test_prob >= 1 - test_prob, dtype=np.int32)
         else:
             pred = np.argmax(test_prob, axis=-1)
 
-        if self._binary_classification or len(y.shape) == 1: # y --> Class labels
+        if self._binary_classification or len(y.shape) == 1:  # y --> Class labels
             accuracy = np.mean(pred == y) * 100.0
-        elif len(y.shape) == 2: # y --> OneHot Representation
+        elif len(y.shape) == 2:  # y --> OneHot Representation
             pred_onehot = np.zeros((pred.size, self._nn.num_classes))
             pred_onehot[np.arange(pred.size), pred] = 1
             pred_diff = np.sum(np.fabs(y - pred_onehot), axis=-1) / 2.0
             accuracy = (1.0 - np.mean(pred_diff)) * 100.0
         return accuracy
 
-
     def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
-                  test_loss, train_accuracy, test_accuracy):
-        test_l = self.batch_loss(self._test_X, self._test_y, batch_size, inference=True)
+                  test_loss, train_accuracy, test_accuracy, log_freq=1):
+        test_l = self.batch_loss(self._test_X, self._test_y, batch_size, inference=True,
+                                 log_freq=log_freq)
         if self._regression:
-            train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=True)
+            train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=True,
+                                      log_freq=log_freq)
             train_accur = np.sqrt(train_l)
             test_accur = np.sqrt(test_l)
-        else: # Classification
+        else:  # Classification
             train_accur = self.evaluate(self._train_X, self._train_y, batch_size, inference=True)
             test_accur = self.evaluate(self._test_X, self._test_y, batch_size, inference=True)
 
@@ -408,13 +399,24 @@ class Training(ABC):
         test_accuracy.append(test_accur)
 
         # Print training logs
-        print("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - Test Accuracy: %.4f" %
-              (epoch, train_l, test_l, train_accur, test_accur))
+        print(("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - " +
+               "Test Accuracy: %.4f") % (epoch, train_l, test_l, train_accur, test_accur))
 
         if plot:
             self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
                                      test_accuracy)
 
+    def print_log_rnn(self, epoch, plot, fig, axs, train_l, epochs_list, train_loss):
+
+        # Store training logs
+        epochs_list.append(epoch)
+        train_loss.append(train_l)
+
+        # Print training logs
+        print("Epoch-%d - Training Loss: %.4f" % (epoch, train_l))
+
+        if plot:
+            self.rnn_learning_curve_plot(fig, axs, train_loss)
 
     def learning_curve_plot(self, fig, axs, train_loss, test_loss, train_accuracy, test_accuracy):
         x_values = list(range(len(train_loss)))
@@ -435,6 +437,16 @@ class Training(ABC):
         plt.show(block=False)
         plt.pause(0.01)
 
+    def rnn_learning_curve_plot(self, fig, axs, train_loss):
+        x_values = list(range(len(train_loss)))
+
+        axs.clear()
+        axs.plot(x_values, train_loss, color='red', label='Train Loss')
+        axs.set(ylabel='Loss')
+        axs.legend(loc='upper right')
+
+        plt.show(block=False)
+        plt.pause(0.01)
 
     def prepare_data(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256,
                      y_onehot=False):
@@ -458,8 +470,51 @@ class Training(ABC):
         print("Training Data:\n", self._train_X.shape)
         print("Test Data:\n", self._test_X.shape)
 
+    def prepare_character_data(self, X, y=None):
+        # Encode data to OneHot
+        data_size = len(X)
+        unique_chars = list(set(X))
+        K = len(unique_chars)
 
-    def train(self, batch_size=256, epochs=100, plot=None, log_freq=1000):
+        self._char_to_idx = {ch: i for i, ch in enumerate(unique_chars)}
+        self._idx_to_char = {i: ch for i, ch in enumerate(unique_chars)}
+
+        self._train_X = np.zeros((data_size, K), dtype=conf.dtype)
+        for i, d in enumerate(X):
+            self._train_X[i, self._char_to_idx[d]] = 1
+
+        for k, v in self._idx_to_char.items():
+            print("%d: %s" % (k, v))
+
+        print("Training Data:\n", self._train_X.shape)
+
+    def sample(self, sample_length=100):
+        sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
+        while not (sampled_char.isalpha() and sampled_char.isupper()):
+            sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
+
+        sampled_text = [sampled_char]
+        rnn_out = None
+        for n in range(sample_length):
+            for layer in self._nn.layers:
+                if layer.type in ['RNN_Layer']:
+                    if n == 0:
+                        # Reset hidden state at the beginning of sequence generation
+                        layer.reset_hidden_state()
+                    input = np.zeros((1, self._nn.num_classes), dtype=conf.dtype)
+                    input[0, self._char_to_idx[sampled_char]] = 1
+                    rnn_out = np.copy(layer.forward(input, inference=True)[1])
+                    layer.reset_hidden_state(rnn_out)
+                else:
+                    probs = layer.forward(rnn_out, inference=True)
+                    sampled_idx = np.random.choice(range(self._nn.num_classes),
+                                                   p=probs.reshape(-1))
+                    sampled_char = self._idx_to_char[sampled_idx]
+                    sampled_text.append(sampled_char)
+
+        return sampled_text
+
+    def train(self, batch_size=256, epochs=1000, plot=None, log_freq=100):
         start_time = time.time()
 
         if plot is not None:
@@ -473,17 +528,19 @@ class Training(ABC):
         test_loss = list()
         train_accuracy = list()
         test_accuracy = list()
-        num_batches = int(np.ceil(self._train_X.shape[0] /  batch_size))
+        num_batches = int(np.ceil(self._train_X.shape[0] / batch_size))
 
-        init_train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=False)
+        init_train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=False,
+                                       log_freq=log_freq)
         self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
-                       test_loss, train_accuracy, test_accuracy)
+                       test_loss, train_accuracy, test_accuracy, log_freq)
 
         for e in range(epochs):
             for i in range(num_batches):
-                # print("Epoch: %d -- Batch: %d" % (e, i))
+                if log_freq < 0:
+                    print("Epoch: %d -- Batch: %d" % (e, i))
                 start = int(batch_size * i)
-                if i == num_batches-1:
+                if i == num_batches - 1:
                     end = self._train_X.shape[0]
                 else:
                     end = start + batch_size
@@ -492,11 +549,11 @@ class Training(ABC):
                                     inference=False)
                 loss_grad = self.loss_gradient(self._train_X[start:end], self._train_y[start:end])
                 _ = self._nn.backward(loss_grad, self._lambda)
-                self.update_network(e+1)
+                self.update_network(e + 1)
 
-            if (e+1) % log_freq == 0:
-                self.print_log(e+1, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
-                               test_loss, train_accuracy, test_accuracy)
+            if (e + 1) % np.abs(log_freq) == 0:
+                self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
+                               train_loss, test_loss, train_accuracy, test_accuracy, log_freq)
 
         training_logs_dict = OrderedDict()
         training_logs_dict['epochs'] = epochs_list
@@ -506,7 +563,60 @@ class Training(ABC):
         training_logs_dict['test_accuracy'] = test_accuracy
 
         end_time = time.time()
-        print("\nTraining Time: %.2f(s)" % (end_time-start_time))
+        print("\nTraining Time: %.2f(s)" % (end_time - start_time))
+
+        return training_logs_dict
+
+    def train_rnn(self, batch_size=256, epochs=1000, sample_length=100, plot=None, log_freq=100):
+        start_time = time.time()
+
+        if plot is not None:
+            fig, axs = plt.subplots(1, sharey=False, sharex=True)
+            fig.suptitle(plot, fontsize=20)
+        else:
+            fig = axs = None
+
+        epochs_list = list()
+        train_loss = list()
+        num_batches = int(np.ceil((self._train_X.shape[0] - 1) / batch_size))
+
+        for e in range(epochs):
+            for i in range(num_batches):
+                startX = int(batch_size * i)
+                startY = startX + 1
+                if i == num_batches - 1:
+                    endX = self._train_X.shape[0] - 1
+                    endY = endX + 1
+                else:
+                    endX = startX + batch_size
+                    endY = endX + 1
+
+                train_l = self.loss(self._train_X[startX:endX], self._train_X[startY:endY],
+                                    inference=False)
+                loss_grad = self.loss_gradient(self._train_X[startX:endX],
+                                               self._train_X[startY:endY])
+                _ = self._nn.backward(loss_grad, self._lambda)
+                self.update_network(e + 1)
+
+            if e % 25 == 0:
+                # Sample from the model by setting an initial seed
+                sampled_text = self.sample(sample_length)
+                print('\n', ''.join(sampled_text), '\n')
+
+            if (e + 1) % np.abs(log_freq) == 0:
+                self.print_log_rnn((e + 1), plot, fig, axs, train_l, epochs_list, train_loss)
+
+            # End of an epoch - Reset RNN layers
+            for layer in self._nn.layers:
+                if layer.type in ['RNN_Layer']:
+                    layer.reset_hidden_state()
+
+        training_logs_dict = OrderedDict()
+        training_logs_dict['epochs'] = epochs_list
+        training_logs_dict['train_loss'] = train_loss
+
+        end_time = time.time()
+        print("\nTraining Time: %.2f(s)" % (end_time - start_time))
 
         return training_logs_dict
 
@@ -518,9 +628,8 @@ class SGD(Training):
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
                          name=name)
 
-
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
-              y_onehot=False, plot=None, log_freq=1000):
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=1000,
+              y_onehot=False, plot=None, log_freq=100):
         self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
                           batch_size=batch_size, y_onehot=y_onehot)
 
@@ -528,52 +637,70 @@ class SGD(Training):
                                            log_freq=log_freq)
         return training_logs_dict
 
+    def train_rnn(self, X, y=None, batch_size=256, epochs=1000, sample_length=100, plot=None,
+                  log_freq=100):
+        self.prepare_character_data(X=X, y=y)
+
+        training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
+                                               sample_length=sample_length, log_freq=log_freq)
+        return training_logs_dict
 
     def update_network(self, t=None):
-        for l in self._nn.layers:
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                l.weights += -self._step_size * l.weights_grad
-                if l.bias is not None:
-                    l.bias += -self._step_size * l.bias_grad
+        for layer in self._nn.layers:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                layer.weights += -self._step_size * layer.weights_grad
+                if layer.bias is not None:
+                    layer.bias += -self._step_size * layer.bias_grad
+            layer.reset()
 
 
 class Momentum(Training):
-    def __init__(self, nn=None, step_size=1e-2, mu=0.5, reg_lambda=1e-4, train_size=70, test_size=30,
-                 activatin_type=None, regression=False, name=None):
+    def __init__(self, nn=None, step_size=1e-2, mu=0.5, reg_lambda=1e-4, train_size=70,
+                 test_size=30, activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
                          name=name)
         self._mu = mu
         self._vel = list()
 
-
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
-              y_onehot=False, plot=None, log_freq=1000):
-        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
-                          batch_size=batch_size, y_onehot=y_onehot)
-
+    def init_momentum_velocity(self):
         # Initialize momentum velocities to zero
-        for l in self._nn.layers:
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                v = {'w': np.zeros_like(l.weights),
-                     'b': np.zeros_like(l.bias)}
+        for layer in self._nn.layers:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                v = {'w': np.zeros_like(layer.weights),
+                     'b': np.zeros_like(layer.bias)}
             else:
                 v = None
             self._vel.append(v)
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=1000,
+              y_onehot=False, plot=None, log_freq=100):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+        self.init_momentum_velocity()
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
                                            log_freq=log_freq)
         return training_logs_dict
 
+    def train_rnn(self, X, y, batch_size=256, epochs=10000, sample_length=100, plot=None,
+                  log_freq=100):
+        self.prepare_data(X=X, y=y, batch_size=batch_size)
+        self.init_momentum_velocity()
+
+        training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
+                                               sample_length=sample_length, log_freq=log_freq)
+        return training_logs_dict
 
     def update_network(self, t=None):
-        for l, v in zip(self._nn.layers, self._vel):
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                v['w'] = (v['w'] * self._mu) - (self._step_size * l.weights_grad)
-                v['b'] = (v['b'] * self._mu) - (self._step_size * l.bias_grad)
+        for layer, v in zip(self._nn.layers, self._vel):
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                v['w'] = (v['w'] * self._mu) - (self._step_size * layer.weights_grad)
+                v['b'] = (v['b'] * self._mu) - (self._step_size * layer.bias_grad)
 
-                l.weights += v['w']
-                l.bias += v['b']
+                layer.weights += v['w']
+                layer.bias += v['b']
+            layer.reset()
 
 
 class RMSprop(Training):
@@ -585,34 +712,44 @@ class RMSprop(Training):
         self._beta = beta
         self._cache = list()
 
-
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
-              y_onehot=False, plot=None, log_freq=1000):
-        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
-                          batch_size=batch_size, y_onehot=y_onehot)
-
+    def init_rmsprop_cache(self):
         # Initialize cache to zero
-        for l in self._nn.layers:
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                c = {'w': np.zeros_like(l.weights),
-                     'b': np.zeros_like(l.bias)}
+        for layer in self._nn.layers:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                c = {'w': np.zeros_like(layer.weights),
+                     'b': np.zeros_like(layer.bias)}
             else:
                 c = None
             self._cache.append(c)
+
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=1000,
+              y_onehot=False, plot=None, log_freq=100):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+        self.init_rmsprop_cache()
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
                                            log_freq=log_freq)
         return training_logs_dict
 
+    def train_rnn(self, X, y, batch_size=256, epochs=10000, sample_length=100, plot=None,
+                  log_freq=100):
+        self.prepare_data(X=X, y=y, batch_size=batch_size)
+        self.init_rmsprop_cache()
+
+        training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
+                                               sample_length=sample_length, log_freq=log_freq)
+        return training_logs_dict
 
     def update_network(self, t=None):
-        for l, c in zip(self._nn.layers, self._cache):
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (l.weights_grad**2))
-                c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (l.bias_grad**2))
+        for layer, c in zip(self._nn.layers, self._cache):
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (layer.weights_grad**2))
+                c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (layer.bias_grad**2))
 
-                l.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * l.weights_grad
-                l.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * l.bias_grad
+                layer.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * layer.weights_grad
+                layer.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * layer.bias_grad
+            layer.reset()
 
 
 class Adam(Training):
@@ -626,48 +763,59 @@ class Adam(Training):
         self._m = list()
         self._v = list()
 
-
-    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=100,
-              y_onehot=False, plot=None, log_freq=1000):
-        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
-                          batch_size=batch_size, y_onehot=y_onehot)
-
+    def init_adam_moment(self):
         # Initialize cache to zero
-        for l in self._nn.layers:
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
-                m = {'w': np.zeros_like(l.weights),
-                     'b': np.zeros_like(l.bias)}
+        for layer in self._nn.layers:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+                m = {'w': np.zeros_like(layer.weights),
+                     'b': np.zeros_like(layer.bias)}
 
-                v = {'w': np.zeros_like(l.weights),
-                     'b': np.zeros_like(l.bias)}
+                v = {'w': np.zeros_like(layer.weights),
+                     'b': np.zeros_like(layer.bias)}
             else:
                 m = None
                 v = None
             self._m.append(m)
             self._v.append(v)
 
+    def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=10000,
+              y_onehot=False, plot=None, log_freq=100):
+        self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
+                          batch_size=batch_size, y_onehot=y_onehot)
+        self.init_adam_moment()
+
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
                                            log_freq=log_freq)
         return training_logs_dict
 
+    def train_rnn(self, X, y=None, batch_size=256, epochs=10000, sample_length=100, plot=None,
+                  log_freq=100):
+        self.prepare_character_data(X=X, y=y)
+        self.init_adam_moment()
+
+        training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
+                                               sample_length=sample_length, log_freq=log_freq)
+        return training_logs_dict
 
     def update_network(self, t):
-        for l, m, v in zip(self._nn.layers, self._m, self._v):
-            if l.type in ['FC_Layer', 'Convolution_Layer']:
+        for layer, m, v in zip(self._nn.layers, self._m, self._v):
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
                 # First order moment update
-                m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * l.weights_grad)
-                m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * l.bias_grad)
+                m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * layer.weights_grad)
+                m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * layer.bias_grad)
 
                 # Second order moment update
-                v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (l.weights_grad**2))
-                v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (l.bias_grad**2))
+                v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (layer.weights_grad**2))
+                v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (layer.bias_grad**2))
 
                 # Update Weights
                 m_hat_w = m['w'] / (1.0 - self._beta_1**t)
                 v_hat_w = v['w'] / (1.0 - self._beta_2**t)
-                l.weights += -(self._step_size * m_hat_w) / (np.sqrt(v_hat_w) + 1e-8)
+                layer.weights += -(self._step_size * m_hat_w) / (np.sqrt(v_hat_w) + 1e-8)
 
                 # Update Bias
                 m_hat_b = m['b'] / (1.0 - self._beta_1**t)
                 v_hat_b = v['b'] / (1.0 - self._beta_2**t)
-                l.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
+                layer.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
+
+            layer.reset()

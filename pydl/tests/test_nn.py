@@ -10,15 +10,17 @@
 import unittest
 import numpy as np
 import numpy.testing as npt
-import itertools
 import time
+from collections import OrderedDict
 
 from pydl.nn.layers import FC
 from pydl.nn.conv import Conv
 from pydl.nn.pool import Pool
 from pydl.nn.residual_block import ResidualBlock
+from pydl.nn.rnn import RNN
 from pydl.nn.nn import NN
 from pydl import conf
+
 
 class TestNN(unittest.TestCase):
     def test_forward(self):
@@ -45,7 +47,7 @@ class TestNN(unittest.TestCase):
         w_3 = np.random.randn(l2_out.shape[-1], 11)
         b_3 = np.random.uniform(-1, 1, (1, 11))
         l3_score = np.matmul(l2_out, w_3) + b_3
-        l3_out = (2.0 / (1.0 + np.exp(-2.0*(l3_score)))) - 1.0
+        l3_out = (2.0 / (1.0 + np.exp(-2.0 * (l3_score)))) - 1.0
 
         # Layer 4
         w_4 = np.random.randn(l3_out.shape[-1], 9)
@@ -69,14 +71,14 @@ class TestNN(unittest.TestCase):
         out_list = list([l1_out, l2_out, l3_out, l4_out, l5_out])
         layers_list = list([l1, l2, l3, l4, l5])
         for s in range(5):
-            for e in range(s+1, 6):
+            for e in range(s + 1, 6):
                 layers = layers_list[s:e]
-                true_out = out_list[e-1]
+                true_out = out_list[e - 1]
                 test(inp_list[s], layers, true_out)
-
 
     def test_backward_fc(self):
         self.delta = 1e-3
+
         def test(inp, layers):
             nn = NN(inp, layers)
             nn_out = nn.forward(inp)
@@ -92,29 +94,23 @@ class TestNN(unittest.TestCase):
                 for i in range(weights_grad.shape[0]):
                     for j in range(weights_grad.shape[1]):
                         w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                        w_delta[i,j] = self.delta
+                        w_delta[i, j] = self.delta
                         layer.weights = w + w_delta
                         lhs = nn.forward(inp)
-                        layer_out_lhs = layer.output
+                        # layer_out_lhs = layer.output
                         layer.weights = w - w_delta
                         rhs = nn.forward(inp)
-                        layer_out_rhs = layer.output
-                        weights_finite_diff[i,j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
+                        # layer_out_rhs = layer.output
+                        weights_finite_diff[i, j] = \
+                            np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
-                        if layer.activation.lower() is 'relu':
-                            # Replace finite-diff gradients calculated close to 0 with NN calculated
-                            # gradients to pass assertion test
-                            mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
-                                            dtype=conf.dtype)
-                            if np.sum(mask, keepdims=False) > 0.0:
-                                weights_finite_diff[i,j] = weights_grad[i,j]
-
-                                # # DEBUGGER - Measure number of finite-diff gradients calculated
-                                # # close to 0
-                                # ratio_incorrect = np.sum(mask) / mask.size
-                                # if ratio_incorrect > 0.0:
-                                #     print("Weights Finite-Diff Grad - Incorrect: %f  - Size: %d" %
-                                #           (ratio_incorrect * 100.0, lhs.size))
+                        # if layer.activation.lower() == 'relu':
+                        #     # Replace finite-diff gradients calculated close to 0 with NN
+                        #     # calculated gradients to pass assertion test
+                        #     mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
+                        #                     dtype=conf.dtype)
+                        #     if np.sum(mask, keepdims=False) > 0.0:
+                        #         weights_finite_diff[i, j] = weights_grad[i, j]
                 npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
                 layer.weights = w
 
@@ -156,8 +152,8 @@ class TestNN(unittest.TestCase):
             for i in range(inputs_grad.shape[0]):
                 for j in range(inputs_grad.shape[1]):
                     i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                    i_delta[i,j] = self.delta
-                    inputs_finite_diff[i,j] = np.sum(((nn.forward(inp + i_delta) -
+                    i_delta[i, j] = self.delta
+                    inputs_finite_diff[i, j] = np.sum(((nn.forward(inp + i_delta) -
                                                        nn.forward(inp - i_delta)) /
                                                        (2 * self.delta)) * inp_grad)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
@@ -193,7 +189,6 @@ class TestNN(unittest.TestCase):
             # Layer 7
             w_7 = np.random.randn(w_6.shape[-1], 7)
             b_7 = np.random.uniform(-1, 1, (1, 7))
-
 
             # Case-1
             # ------
@@ -263,45 +258,64 @@ class TestNN(unittest.TestCase):
             layers_c = [l1_c, l2_c, l3_c, l4_c, l5_c, l6_c, l7_c]
             test(X, layers_c)
 
-
     def fc_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
         w = layer.weights
+        # b = layer.bias
         weights_grad = layer.weights_grad
+        # bias_grad = layer.bias_grad
 
         # Weights finite difference gradients
         weights_finite_diff = np.empty(weights_grad.shape)
         for i in range(weights_grad.shape[0]):
             for j in range(weights_grad.shape[1]):
                 w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                w_delta[i,j] = delta
+                w_delta[i, j] = delta
                 layer.weights = w + w_delta
                 lhs = nn.forward(inp)
-                layer_out_lhs = layer.output
+                # layer_out_lhs = layer.output
                 layer.weights = w - w_delta
                 rhs = nn.forward(inp)
-                layer_out_rhs = layer.output
-                weights_finite_diff[i,j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+                # layer_out_rhs = layer.output
+                weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
 
-                if layer.activation.lower() is 'relu':
-                    # Replace finite-diff gradients calculated close to 0 with NN calculated
-                    # gradients to pass assertion test
-                    mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
-                                    dtype=conf.dtype)
-                    if np.sum(mask, keepdims=False) > 0.0:
-                        weights_finite_diff[i,j] = weights_grad[i,j]
-
-                        # # DEBUGGER - Measure number of finite-diff gradients calculated
-                        # # close to 0
-                        # ratio_incorrect = np.sum(mask) / mask.size
-                        # if ratio_incorrect > 0.0:
-                        #     print("Weights Finite-Diff Grad - Incorrect: %f  - Size: %d" %
-                        #           (ratio_incorrect * 100.0, lhs.size))
+                # if layer.activation.lower() == 'relu':
+                #     # Replace finite-diff gradients calculated close to 0 with NN calculated
+                #     # gradients to pass assertion test
+                #     mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
+                #                     dtype=conf.dtype)
+                #     if np.sum(mask, keepdims=False) > 0.0:
+                #         weights_finite_diff[i, j] = weights_grad[i, j]
+                #
+                #         # # DEBUGGER - Measure number of finite-diff gradients calculated
+                #         # # close to 0
+                #         # ratio_incorrect = np.sum(mask) / mask.size
+                #         # if ratio_incorrect > 0.0:
+                #         #     print("Weights Finite-Diff Grad - Incorrect: %f  - Size: %d" %
+                #         #           (ratio_incorrect * 100.0, lhs.size))
         try:
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
-        except:
-            print("Assertion Error Weights: ", layer.name)
+        except AssertionError:
+            print("AssertionError Weights: ", layer.name)
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
         layer.weights = w
+
+        # # Bias finite difference gradients
+        # bias_finite_diff = np.empty(bias_grad.shape)
+        # for i in range(b.shape[0]):
+        #     b_delta = np.zeros(b.shape, dtype=conf.dtype)
+        #     b_delta[i] = delta
+        #     layer.bias = b + b_delta
+        #     lhs = nn.forward(inp)
+        #     layer.bias = b - b_delta
+        #     rhs = nn.forward(inp)
+        #     bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        #
+        # try:
+        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        # except AssertionError:
+        #     print("AssertionError Bias: ", layer.name)
+        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        # layer.bias = b
 
         if layer.has_batchnorm:
             bn = layer.batchnorm
@@ -323,8 +337,8 @@ class TestNN(unittest.TestCase):
             bn.gamma = gamma
             try:
                 npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=4)
-            except:
-                print("Assertion Error BachNorm Gamma: ", layer.name)
+            except AssertionError:
+                print("AssertionError BachNorm Gamma: ", layer.name)
                 npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=4)
 
             # Beta finite difference gradients
@@ -340,10 +354,9 @@ class TestNN(unittest.TestCase):
             bn.beta = beta
             try:
                 npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=4)
-            except:
-                print("Assertion Error BachNorm Beta: ", layer.name)
+            except AssertionError:
+                print("AssertionError BachNorm Beta: ", layer.name)
                 npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=4)
-
 
     def conv_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
         w = layer.weights
@@ -354,35 +367,30 @@ class TestNN(unittest.TestCase):
         for i in range(weights_grad.shape[0]):
             for j in range(weights_grad.shape[1]):
                 for k in range(weights_grad.shape[2]):
-                    for l in range(weights_grad.shape[3]):
+                    for m in range(weights_grad.shape[3]):
                         w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                        w_delta[i,j,k,l] = delta
+                        w_delta[i, j, k, m] = delta
                         layer.weights = w + w_delta
                         lhs = nn.forward(inp)
-                        layer_out_lhs = layer.output
+                        # layer_out_lhs = layer.output
                         layer.weights = w - w_delta
                         rhs = nn.forward(inp)
-                        layer_out_rhs = layer.output
-                        weights_finite_diff[i,j,k,l] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+                        # layer_out_rhs = layer.output
+                        weights_finite_diff[i, j, k, m] = \
+                            np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
 
-                        if layer.activation.lower() is 'relu':
-                            # Replace finite-diff gradients calculated close to 0 with NN calculated
-                            # gradients to pass assertion test
-                            mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
-                                            dtype=conf.dtype)
-                            if np.sum(mask, keepdims=False) > 0.0:
-                                weights_finite_diff[i,j] = weights_grad[i,j]
-
-                                # # DEBUGGER - Measure number of finite-diff gradients calculated
-                                # # close to 0
-                                # ratio_incorrect = np.sum(mask) / mask.size
-                                # if ratio_incorrect > 0.0:
-                                #     print("Weights Finite-Diff Grad - Incorrect: %f  - Size: %d" %
-                                #           (ratio_incorrect * 100.0, lhs.size))
+                        # if layer.activation.lower() is 'relu':
+                        #     print("Inside\n")
+                        #     # Replace finite-diff gradients calculated close to 0 with NN
+                        #     # calculated gradients to pass assertion test
+                        #     mask = np.array(np.logical_xor(layer_out_lhs > 0, layer_out_rhs > 0),
+                        #                     dtype=conf.dtype)
+                        #     if np.sum(mask, keepdims=False) > 0.0:
+                        #         weights_finite_diff[i, j] = weights_grad[i, j]
         try:
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
-        except:
-            print("Assertion Error Weights: ", layer.name)
+        except AssertionError:
+            print("AssertionError Weights: ", layer.name)
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
         layer.weights = w
 
@@ -399,17 +407,18 @@ class TestNN(unittest.TestCase):
                 for j in range(gamma_grad.shape[1]):
                     for k in range(gamma_grad.shape[2]):
                         g_delta = np.zeros(gamma.shape, dtype=conf.dtype)
-                        g_delta[i,j,k] = delta
+                        g_delta[i, j, k] = delta
                         bn.gamma = gamma + g_delta
                         lhs = nn.forward(inp)
                         bn.gamma = gamma - g_delta
                         rhs = nn.forward(inp)
-                        gamma_finite_diff[i,j,k] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+                        gamma_finite_diff[i, j, k] = \
+                            np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
             bn.gamma = gamma
             try:
                 npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=4)
-            except:
-                print("Assertion Error BachNorm Gamma: ", layer.name)
+            except AssertionError:
+                print("AssertionError BachNorm Gamma: ", layer.name)
                 npt.assert_almost_equal(gamma_grad, gamma_finite_diff, decimal=4)
 
             # Beta finite difference gradients
@@ -418,56 +427,120 @@ class TestNN(unittest.TestCase):
                 for j in range(beta_grad.shape[1]):
                     for k in range(beta_grad.shape[2]):
                         b_delta = np.zeros(beta.shape, dtype=conf.dtype)
-                        b_delta[i,j,k] = delta
+                        b_delta[i, j, k] = delta
                         bn.beta = beta + b_delta
                         lhs = nn.forward(inp)
                         bn.beta = beta - b_delta
                         rhs = nn.forward(inp)
-                        beta_finite_diff[i,j,k] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+                        beta_finite_diff[i, j, k] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
             bn.beta = beta
             try:
                 npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=4)
-            except:
-                print("Assertion Error BachNorm Beta: ", layer.name)
+            except AssertionError:
+                print("AssertionError BachNorm Beta: ", layer.name)
                 npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=4)
 
+    def rnn_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
+        tol = 7
+
+        wh = layer.hidden_weights
+        wx = layer.input_weights
+
+        hidden_weights_grad = layer.hidden_weights_grad
+        input_weights_grad = layer.input_weights_grad
+
+        # Hidden weights finite difference gradients
+        hidden_weights_finite_diff = np.empty(hidden_weights_grad.shape)
+        for i in range(hidden_weights_grad.shape[0]):
+            for j in range(hidden_weights_grad.shape[1]):
+                w_delta = np.zeros_like(wh)
+                w_delta[i, j] = delta
+                layer.hidden_weights = wh + w_delta
+                lhs = nn.forward(inp)
+                layer.hidden_weights = wh - w_delta
+                rhs = nn.forward(inp)
+                hidden_weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(hidden_weights_grad, hidden_weights_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Hidden Weights: ", layer.name)
+            npt.assert_almost_equal(hidden_weights_grad, hidden_weights_finite_diff, decimal=tol)
+        layer.hidden_weights = wh
+
+        # Input weights finite difference gradients
+        input_weights_finite_diff = np.empty(input_weights_grad.shape)
+        for i in range(input_weights_grad.shape[0]):
+            for j in range(input_weights_grad.shape[1]):
+                w_delta = np.zeros_like(wx)
+                w_delta[i, j] = delta
+                layer.input_weights = wx + w_delta
+                lhs = nn.forward(inp)
+                layer.input_weights = wx - w_delta
+                rhs = nn.forward(inp)
+                input_weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(input_weights_grad, input_weights_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Input Weights: ", layer.name)
+            npt.assert_almost_equal(input_weights_grad, input_weights_finite_diff, decimal=tol)
+        layer.input_weights = wx
+
+        # # Bias finite difference gradients
+        # bias_finite_diff = np.empty(bias_grad.shape)
+        # for i in range(bias_grad.shape[0]):
+        #     bias_delta = np.zeros_like(bias)
+        #     bias_delta[i] = delta
+        #     layer.bias = bias + bias_delta
+        #     lhs = nn.forward(inp)
+        #     layer.bias = bias - bias_delta
+        #     rhs = nn.forward(inp)
+        #     bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        # try:
+        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        # except AssertionError:
+        #     print("AssertionError Bias: ", layer.name)
+        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        # layer.bias = bias
 
     def inputs_1D_grad_test(self, nn, inp, inp_grad, inputs_grad, delta):
+        if type(inputs_grad) is OrderedDict:
+            seq_len = len(inputs_grad)
+            inputs_grad = np.vstack([inputs_grad[t] for t in range(1, seq_len)])
+
         inputs_finite_diff = np.empty(inputs_grad.shape)
         for i in range(inputs_grad.shape[0]):
             for j in range(inputs_grad.shape[1]):
                 i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                i_delta[i,j] = delta
-                inputs_finite_diff[i,j] = np.sum(((nn.forward(inp + i_delta) -
+                i_delta[i, j] = delta
+                inputs_finite_diff[i, j] = np.sum(((nn.forward(inp + i_delta) -
                                                    nn.forward(inp - i_delta)) /
                                                    (2 * delta)) * inp_grad)
         try:
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-        except:
-            print("Assertion Error - 1D Inputs")
+        except AssertionError:
+            print("AssertionError - 1D Inputs")
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-
 
     def inputs_3D_grad_test(self, nn, inp, inp_grad, inputs_grad, delta):
         inputs_finite_diff = np.empty(inputs_grad.shape)
         for i in range(inputs_grad.shape[0]):
             for j in range(inputs_grad.shape[1]):
                 for k in range(inputs_grad.shape[2]):
-                    for l in range(inputs_grad.shape[3]):
+                    for m in range(inputs_grad.shape[3]):
                         i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                        i_delta[i,j,k,l] = delta
-                        inputs_finite_diff[i,j,k,l] = np.sum(((nn.forward(inp + i_delta) -
-                                                               nn.forward(inp - i_delta)) /
-                                                               (2 * delta)) * inp_grad)
+                        i_delta[i, j, k, m] = delta
+                        inputs_finite_diff[i, j, k, m] = np.sum(((nn.forward(inp + i_delta) -
+                                                                 nn.forward(inp - i_delta)) /
+                                                                 (2 * delta)) * inp_grad)
         try:
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-        except:
-            print("Assertion Error - 3D Inputs")
+        except AssertionError:
+            print("AssertionError - 3D Inputs")
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-
 
     def test_backward_FC(self):
         self.delta = 1e-3
+
         def test(inp, layers):
             nn = NN(inp, layers)
             nn_out = nn.forward(inp)
@@ -512,29 +585,35 @@ class TestNN(unittest.TestCase):
             w_7 = np.random.randn(w_6.shape[-1], 7)
             b_7 = np.random.uniform(-1, 1, (1, 7))
 
-
             # Case-1
             # ------
-            l1_a = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh')
-            l2_a = FC(l1_a, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid')
-            l3_a = FC(l2_a, w_3.shape[-1], w_3, b_3, activation_fn='Tanh')
-            l4_a = FC(l3_a, w_4.shape[-1], w_4, b_4, activation_fn='Linear')
-            l5_a = FC(l4_a, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid')
-            l6_a = FC(l5_a, w_6.shape[-1], w_6, b_6, activation_fn='Linear')
-            l7_a = FC(l6_a, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax')
+            l1_a = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', name='FC-1')
+            l2_a = FC(l1_a, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', name='FC-2')
+            l3_a = FC(l2_a, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', name='FC-3')
+            l4_a = FC(l3_a, w_4.shape[-1], w_4, b_4, activation_fn='Linear', name='FC-4')
+            l5_a = FC(l4_a, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', name='FC-5')
+            l6_a = FC(l5_a, w_6.shape[-1], w_6, b_6, activation_fn='Linear', name='FC-6')
+            l7_a = FC(l6_a, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', name='FC-7-Out')
 
             layers_a = [l1_a, l2_a, l3_a, l4_a, l5_a, l6_a, l7_a]
             test(X, layers_a)
 
             # Case-2: With BatchNorm
             # ----------------------
-            l1_b = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', batchnorm=False)
-            l2_b = FC(l1_b, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', batchnorm=True)
-            l3_b = FC(l2_b, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True)
-            l4_b = FC(l3_b, w_4.shape[-1], w_4, b_4, activation_fn='Linear', batchnorm=False)
-            l5_b = FC(l4_b, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False)
-            l6_b = FC(l5_b, w_6.shape[-1], w_6, b_6, activation_fn='Linear', batchnorm=True)
-            l7_b = FC(l6_b, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False)
+            l1_b = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', batchnorm=False,
+                      name='FC-1')
+            l2_b = FC(l1_b, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', batchnorm=True,
+                      name='FC-2')
+            l3_b = FC(l2_b, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True,
+                      name='FC-3')
+            l4_b = FC(l3_b, w_4.shape[-1], w_4, b_4, activation_fn='Linear', batchnorm=False,
+                      name='FC-4')
+            l5_b = FC(l4_b, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False,
+                      name='FC-5')
+            l6_b = FC(l5_b, w_6.shape[-1], w_6, b_6, activation_fn='Linear', batchnorm=True,
+                      name='FC-6')
+            l7_b = FC(l6_b, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False,
+                      name='FC-7-Out')
 
             layers_b = [l1_b, l2_b, l3_b, l4_b, l5_b, l6_b, l7_b]
             test(X, layers_b)
@@ -544,46 +623,49 @@ class TestNN(unittest.TestCase):
             # Layer-1
             dp1 = np.random.rand()
             l1_c = FC(X, w_1.shape[-1], w_1, b_1, activation_fn='Tanh', batchnorm=False,
-                      dropout=dp1)
+                      dropout=dp1, name='FC-1')
             mask_l1 = np.array(np.random.rand(batch_size, w_1.shape[-1]) < dp1, dtype=conf.dtype)
             l1_c.dropout_mask = mask_l1
 
             # Layer-2
             dp2 = np.random.rand()
             l2_c = FC(l1_c, w_2.shape[-1], w_2, b_2, activation_fn='Sigmoid', batchnorm=True,
-                      dropout=dp2)
+                      dropout=dp2, name='FC-2')
             mask_l2 = np.array(np.random.rand(batch_size, w_2.shape[-1]) < dp2, dtype=conf.dtype)
             l2_c.dropout_mask = mask_l2
 
             # Layer-3
-            l3_c = FC(l2_c, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True)
+            l3_c = FC(l2_c, w_3.shape[-1], w_3, b_3, activation_fn='Tanh', batchnorm=True,
+                      name='FC-3')
 
             # Layer-4
             dp4 = np.random.rand()
             l4_c = FC(l3_c, w_4.shape[-1], w_4, b_4, activation_fn='Linear', batchnorm=False,
-                      dropout=dp4)
+                      dropout=dp4, name='FC-4')
             mask_l4 = np.array(np.random.rand(batch_size, w_4.shape[-1]) < dp4, dtype=conf.dtype)
             l4_c.dropout_mask = mask_l4
 
             # Layer-5
-            l5_c = FC(l4_c, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False)
+            l5_c = FC(l4_c, w_5.shape[-1], w_5, b_5, activation_fn='Sigmoid', batchnorm=False,
+                      name='FC-5')
 
             # Layer-6
             dp6 = np.random.rand()
             l6_c = FC(l5_c, w_6.shape[-1], w_6, b_6, activation_fn='Tanh', batchnorm=True,
-                      dropout=dp6)
+                      dropout=dp6, name='FC-6')
             mask_l6 = np.array(np.random.rand(batch_size, w_6.shape[-1]) < dp6, dtype=conf.dtype)
             l6_c.dropout_mask = mask_l6
 
             # Layer-7
-            l7_c = FC(l6_c, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False)
+            l7_c = FC(l6_c, w_7.shape[-1], w_7, b_7, activation_fn='SoftMax', batchnorm=False,
+                      name='FC-7-Out')
 
             layers_c = [l1_c, l2_c, l3_c, l4_c, l5_c, l6_c, l7_c]
             test(X, layers_c)
 
-
     def test_backward_convolution_pooling(self):
         self.delta = 1e-6
+
         def test(nn, layers, inp):
             nn_out = nn.forward(inp)
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
@@ -630,7 +712,7 @@ class TestNN(unittest.TestCase):
             num_kernals_2 = 5
             rec_h_2 = 3
             rec_w_2 = 3
-            pad_2 = (0,0)
+            pad_2 = (0, 0)
             stride_2 = 1
             w_2 = np.random.randn(num_kernals_2, num_kernals_1, rec_h_2, rec_w_2)
             b_2 = np.random.uniform(-1, 1, (1, num_kernals_2))
@@ -652,7 +734,7 @@ class TestNN(unittest.TestCase):
             num_kernals_4 = 4
             rec_h_4 = 3
             rec_w_4 = 3
-            pad_4 = (1,2)
+            pad_4 = (1, 2)
             stride_4 = 1
             w_4 = np.random.randn(num_kernals_4, num_kernals_2, rec_h_4, rec_w_4)
             b_4 = np.random.uniform(-1, 1, (1, num_kernals_4))
@@ -694,7 +776,7 @@ class TestNN(unittest.TestCase):
             b_8 = np.random.uniform(-1, 1, (1, 32))
             dp8 = np.random.rand()
             l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
-                      name='FC-8', batchnorm=True, dropout=dp8)
+                    name='FC-8', batchnorm=True, dropout=dp8)
             mask_l8 = np.array(np.random.rand(batch_size, w_8.shape[-1]) < dp8, dtype=conf.dtype)
             l8.dropout_mask = mask_l8
 
@@ -703,7 +785,7 @@ class TestNN(unittest.TestCase):
             b_9 = np.random.uniform(-1, 1, (1, 16))
             dp9 = np.random.rand()
             l9 = FC(l8, num_neurons=w_9.shape[-1], weights=w_9, bias=b_9,
-                      activation_fn='Linear', name='FC-9', batchnorm=True, dropout=dp9)
+                    activation_fn='Linear', name='FC-9', batchnorm=True, dropout=dp9)
             mask_l9 = np.array(np.random.rand(batch_size, w_9.shape[-1]) < dp9, dtype=conf.dtype)
             l9.dropout_mask = mask_l9
 
@@ -720,9 +802,9 @@ class TestNN(unittest.TestCase):
                 X = np.random.uniform(-1, 1, (batch_size, depth, num_rows, num_cols))
                 test(nn, layers, X)
 
-
     def test_backward_resnet(self):
         self.delta = 1e-6
+
         def test(nn, layers, inp):
             nn_out = nn.forward(inp)
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
@@ -789,12 +871,12 @@ class TestNN(unittest.TestCase):
             activation_fn_1 = ['Relu', 'Relu', 'Relu']
             stride_1 = 1
             conv_layers_1 = [l2]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_1, num_filters_1, activation_fn_1)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_1, num_filters_1,
+                                                              activation_fn_1)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_1[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_1 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-1-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_1 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-1-%d' % (i + 1))
                 conv_layers_1.append(conv)
 
             res_block_1 = ResidualBlock(l2, conv_layers_1[1:], activation_fn='Relu')
@@ -805,12 +887,12 @@ class TestNN(unittest.TestCase):
             activation_fn_2 = ['Relu', 'Relu', 'Relu']
             stride_2 = 1
             conv_layers_2 = [res_block_1]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_2, num_filters_2, activation_fn_2)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_2, num_filters_2,
+                                                              activation_fn_2)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_2[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_2 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-2-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_2 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-2-%d' % (i + 1))
                 conv_layers_2.append(conv)
 
             res_block_2 = ResidualBlock(res_block_1, conv_layers_2[1:], activation_fn='Relu')
@@ -821,12 +903,12 @@ class TestNN(unittest.TestCase):
             activation_fn_3 = ['Relu', 'Relu', 'Relu']
             stride_3 = 2
             conv_layers_3 = [res_block_2]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_3, num_filters_3, activation_fn_3)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_3, num_filters_3,
+                                                              activation_fn_3)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_3[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_3 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-3-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_3 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-3-%d' % (i + 1))
                 conv_layers_3.append(conv)
 
             res_block_3 = ResidualBlock(res_block_2, conv_layers_3[1:], activation_fn='Relu')
@@ -837,12 +919,12 @@ class TestNN(unittest.TestCase):
             activation_fn_4 = ['Relu', 'Relu', 'Relu']
             stride_4 = 1
             conv_layers_4 = [res_block_3]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_4, num_filters_4, activation_fn_4)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_4, num_filters_4,
+                                                              activation_fn_4)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_4[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_4 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-4-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_4 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-4-%d' % (i + 1))
                 conv_layers_4.append(conv)
 
             res_block_4 = ResidualBlock(res_block_3, conv_layers_4[1:], activation_fn='Relu')
@@ -853,12 +935,12 @@ class TestNN(unittest.TestCase):
             activation_fn_5 = ['Relu', 'Linear', 'Sigmoid', 'Tanh', 'Relu']
             stride_5 = 2
             conv_layers_5 = [res_block_4]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_5, num_filters_5, activation_fn_5)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_5, num_filters_5,
+                                                              activation_fn_5)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_5[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_5 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-5-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_5 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-5-%d' % (i + 1))
                 conv_layers_5.append(conv)
 
             res_block_5 = ResidualBlock(res_block_4, conv_layers_5[1:], activation_fn='Relu')
@@ -869,26 +951,27 @@ class TestNN(unittest.TestCase):
             activation_fn_6 = ['ReLU']
             stride_6 = 1
             conv_layers_6 = [res_block_5]
-            for i, (rcp, n_filters, actv_fn) in \
-                enumerate(zip(rcp_field_6, num_filters_6, activation_fn_6)):
-                pad = int((rcp-1)/2)
+            for i, (rcp, n_filters, actv_fn) in enumerate(zip(rcp_field_6, num_filters_6,
+                                                              activation_fn_6)):
+                pad = int((rcp - 1) / 2)
                 conv = Conv(conv_layers_6[-1], receptive_field=(rcp, rcp), num_filters=n_filters,
-                            zero_padding=pad, stride=(stride_6 if i==0 else 1), batchnorm=True,
-                            activation_fn=actv_fn, name='Conv-6-%d'%(i+1))
+                            zero_padding=pad, stride=(stride_6 if i == 0 else 1), batchnorm=True,
+                            activation_fn=actv_fn, name='Conv-6-%d' % (i + 1))
                 conv_layers_6.append(conv)
 
             res_block_6 = ResidualBlock(res_block_5, conv_layers_6[1:], activation_fn='Linear')
 
             # Layer 7 - MaxPool
             stride_7 = 1
-            l7 = Pool(res_block_6, receptive_field=(3, 3), stride=1, pool='AVG', name='MaxPool-7')
+            l7 = Pool(res_block_6, receptive_field=(3, 3), stride=stride_7, pool='AVG',
+                      name='MaxPool-7')
 
             # Layer 8 - FC
             w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
             b_8 = np.random.uniform(-1, 1, (1, 32))
             dp8 = np.random.rand()
             l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
-                      name='FC-8', batchnorm=True, dropout=dp8)
+                    name='FC-8', batchnorm=True, dropout=dp8)
             mask_l8 = np.array(np.random.rand(batch_size, w_8.shape[-1]) < dp8, dtype=conf.dtype)
             l8.dropout_mask = mask_l8
 
@@ -906,16 +989,112 @@ class TestNN(unittest.TestCase):
                 X = np.random.uniform(-1, 1, (batch_size, depth, num_rows, num_cols))
                 test(nn, layers, X)
 
+    def test_backward_RNN(self):
+        self.delta = 1e-5
+
+        def test(inp, layers):
+            nn = NN(inp, layers)
+            nn_out = nn.forward(inp)
+            inp_grad = np.random.uniform(-1, 1, nn_out.shape)
+            inputs_grad = nn.backward(inp_grad)
+
+            for layer in layers:
+                if layer.type == 'FC_Layer':
+                    self.fc_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                elif layer.type == 'RNN_Layer':
+                    self.rnn_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+
+            # Inputs finite difference gradients
+            self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
+
+        for _ in range(1):
+            # Case-1 - Continuous Inputs
+            # --------------------------
+            # Layer 1
+            seq_len = 100
+            num_neurons_rnn = 15
+            X = np.random.uniform(-1, 1, (seq_len, 25)) * 0.01
+            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
+            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
+            w_1 = {'hidden': w_1h, 'inp': w_1x}
+            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+
+            # Layer 2
+            w_2 = np.random.randn(b_1.shape[-1], 20) * 0.01
+            b_2 = np.random.uniform(-1, 1, (1, 20)) * 0.01
+
+            # RNN Architecture
+            # ----------------
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh')
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-2- OneHot Inputs
+            # ---------------------
+            # Layer 1
+            seq_len = 101
+            num_neurons_rnn = 24
+            X = np.zeros((seq_len, 13), dtype=conf.dtype)
+            X[range(seq_len), np.random.randint(13, size=seq_len)] = 1
+            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
+            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
+            w_1 = {'hidden': w_1h, 'inp': w_1x}
+            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+
+            # Layer 2
+            w_2 = np.random.randn(b_1.shape[-1], 10) * 0.01
+            b_2 = np.random.uniform(-1, 1, (1, 10)) * 0.01
+
+            # RNN Architecture
+            # ----------------
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh')
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-3 - Sandwitched Layers
+            # ---------------------------
+            # Layer 1
+            batch_size = seq_len = 99
+            inp_feat_size = 25
+            num_neurons_fc = 30
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
+            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * 0.01
+            b_1 = np.random.uniform(-1, 1, (1, num_neurons_fc)) * 0.01
+
+            # Layer 2
+            seq_len = 100
+            num_neurons_rnn = 15
+            w_2h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
+            w_2x = np.random.randn(w_1.shape[-1], num_neurons_rnn) * 0.01
+            w_2 = {'hidden': w_2h, 'inp': w_2x}
+            b_2 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+
+            # Layer 3
+            w_3 = np.random.randn(b_2.shape[-1], 20) * 0.01
+            b_3 = np.random.uniform(-1, 1, (1, 20)) * 0.01
+
+            # RNN Architecture
+            # ----------------
+            l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU')
+            l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh')
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
 
     def performance_test_convolution_pooling(self):
         def test(nn, inp, i):
             start = time.time()
             nn_out = nn.forward(inp)
             end = time.time()
-            print("%d - Forward Time: %.8f" % (i, (end-start)*16))
+            print("%d - Forward Time: %.8f" % (i, (end - start) * 16))
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
-            inputs_grad = nn.backward(inp_grad)
-            print("%d - Backward Time: %.8f" % (i, (time.time()-end)*16))
+            _ = nn.backward(inp_grad)
+            print("%d - Backward Time: %.8f" % (i, (time.time() - end) * 16))
             nn.update_weights(1e-4)
 
         for _ in range(1):
