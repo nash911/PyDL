@@ -15,6 +15,7 @@ import itertools
 from pydl.nn.pool import Pool
 from pydl import conf
 
+
 class TestPool(unittest.TestCase):
     def unroll_input_volume(self, inp, k_h, k_w, strd_r, strd_c, pool='MAX'):
         batch, dep, inp_h, inp_w = inp.shape
@@ -32,21 +33,21 @@ class TestPool(unittest.TestCase):
         else:
             pad_w = k_w - inp_w
 
-        if pad_h == 0 and pad_w == 0 and (inp_h-k_h) >= 0 and (inp_w-k_w) >= 0:
-            pad_h_tuple = tuple((0,0))
-            pad_w_tuple = tuple((0,0))
+        if pad_h == 0 and pad_w == 0 and (inp_h - k_h) >= 0 and (inp_w - k_w) >= 0:
+            pad_h_tuple = tuple((0, 0))
+            pad_w_tuple = tuple((0, 0))
         else:
-            if pad_h == 0 and (inp_h-k_h) >= 0:
-                pad_h_tuple = tuple((0,0))
+            if pad_h == 0 and (inp_h - k_h) >= 0:
+                pad_h_tuple = tuple((0, 0))
             else:
-                pad_h_tuple = tuple((int(np.floor(pad_h/2)), int(np.ceil(pad_h/2))))
+                pad_h_tuple = tuple((int(np.floor(pad_h / 2)), int(np.ceil(pad_h / 2))))
 
-            if pad_w == 0 and (inp_w-k_w) >= 0:
-                pad_w_tuple = tuple((0,0))
+            if pad_w == 0 and (inp_w - k_w) >= 0:
+                pad_w_tuple = tuple((0, 0))
             else:
-                pad_w_tuple = tuple((int(np.floor(pad_w/2)), int(np.ceil(pad_w/2))))
+                pad_w_tuple = tuple((int(np.floor(pad_w / 2)), int(np.ceil(pad_w / 2))))
 
-        input_padded = np.pad(inp, ((0,0),(0,0),pad_h_tuple,pad_w_tuple), 'constant',
+        input_padded = np.pad(inp, ((0, 0), (0, 0), pad_h_tuple, pad_w_tuple), 'constant',
                               constant_values=-np.inf if pool == 'MAX' else 0)
 
         if inp_h >= k_h:
@@ -69,12 +70,11 @@ class TestPool(unittest.TestCase):
             for d in range(dep):
                 for row in range(out_rows):
                     for col in range(out_cols):
-                        inp_row = int(row/out_w)*strd_r + int((col%kernal_size)/k_w)
-                        inp_col = int(row%out_w)*strd_c + (col%k_w)
+                        inp_row = int(row / out_w) * strd_r + int((col % kernal_size) / k_w)
+                        inp_col = int(row % out_w) * strd_c + (col % k_w)
                         unrolled_inp[b, d, row, col] = input_padded[b, d, inp_row, inp_col]
 
         return unrolled_inp, out_h, out_w
-
 
     def test_forward_max(self):
         def test(inp, true_out, stride, rcp_field=None):
@@ -82,39 +82,37 @@ class TestPool(unittest.TestCase):
             pool_out = pool.forward(inp)
             npt.assert_almost_equal(pool_out, true_out, decimal=8)
 
-
         # Manually calculated
         # -------------------
-        inp = np.array([[[2, 0, 0, 1, 2], # Slice-1
+        inp = np.array([[[2, 0, 0, 1, 2],  # Slice-1
                          [0, 1, 2, 0, 0],
                          [1, 1, 2, 0, 2],
                          [1, 1, 1, 1, 0],
                          [2, 0, 2, 2, 1]],
-                        [[1, 1, 1, 2, 1], # Slice-2
+                        [[1, 1, 1, 2, 1],  # Slice-2
                          [2, 1, 0, 0, 0],
                          [1, 2, 0, 1, 1],
                          [1, 2, 0, 2, 2],
                          [2, 0, 0, 1, 0]],
-                        [[1, 0, 1, 0, 2], # Slice-3
+                        [[1, 0, 1, 0, 2],  # Slice-3
                          [2, 0, 1, 0, 1],
                          [0, 2, 0, 1, 1],
                          [0, 0, 0, 0, 2],
                          [0, 2, 2, 0, 1]]], dtype=conf.dtype)
-        X = np.array([inp, inp*2])
+        X = np.array([inp, inp * 2])
 
-        out = np.array([[[2, 2, 2], # Slice-1
+        out = np.array([[[2, 2, 2],  # Slice-1
                          [1, 2, 2],
                          [2, 2, 1]],
-                        [[2, 2, 1], # Slice-2
+                        [[2, 2, 1],  # Slice-2
                          [2, 2, 2],
                          [2, 1, 0]],
-                        [[2, 1, 2], # Slice-3
+                        [[2, 1, 2],  # Slice-3
                          [2, 1, 2],
                          [2, 2, 1]]], dtype=conf.dtype)
-        true_out = np.array([out, out*2])
+        true_out = np.array([out, out * 2])
 
         test(X, true_out, stride=2, rcp_field=(2, 2))
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -126,8 +124,6 @@ class TestPool(unittest.TestCase):
         kernal_width = [1, 3, 5, 9]
         stride_r = [1, 2, 3, 4]
         stride_c = [1, 2, 3, 4]
-
-        counter = 0
 
         for batch, dep, inp_h, inp_w, k_h, k_w, strd_r, strd_c in \
             list(itertools.product(batch_size, inp_depth, inp_height, inp_width, kernal_height,
@@ -143,48 +139,43 @@ class TestPool(unittest.TestCase):
 
             test(X, true_out, stride=(strd_r, strd_c), rcp_field=(k_h, k_w))
 
-
     def test_forward_avg(self):
         def test(inp, true_out, stride, rcp_field=None):
             pool = Pool(inp, receptive_field=rcp_field, stride=stride, pool='AVG')
             pool_out = pool.forward(inp)
-            # print("pool_out: \n", pool_out)
-            # print("true_out: \n", true_out)
             npt.assert_almost_equal(pool_out, true_out, decimal=8)
-
 
         # Manually calculated
         # -------------------
-        inp = np.array([[[2, 0, 0, 1, 2], # Slice-1
+        inp = np.array([[[2, 0, 0, 1, 2],  # Slice-1
                          [0, 1, 2, 0, 0],
                          [1, 1, 2, 0, 2],
                          [1, 1, 1, 1, 0],
                          [2, 0, 2, 2, 1]],
-                        [[1, 1, 1, 2, 1], # Slice-2
+                        [[1, 1, 1, 2, 1],  # Slice-2
                          [2, 1, 0, 0, 0],
                          [1, 2, 0, 1, 1],
                          [1, 2, 0, 2, 2],
                          [2, 0, 0, 1, 0]],
-                        [[1, 0, 1, 0, 2], # Slice-3
+                        [[1, 0, 1, 0, 2],  # Slice-3
                          [2, 0, 1, 0, 1],
                          [0, 2, 0, 1, 1],
                          [0, 0, 0, 0, 2],
                          [0, 2, 2, 0, 1]]], dtype=conf.dtype)
-        X = np.array([inp, inp*2])
+        X = np.array([inp, inp * 2])
 
-        out = np.array([[[0.75, 0.75, 0.5], # Slice-1
+        out = np.array([[[0.75, 0.75, 0.5],  # Slice-1
                          [1.0, 1.0, 0.5],
                          [0.5, 1.0, 0.25]],
-                        [[1.25, 0.75, 0.25], # Slice-2
+                        [[1.25, 0.75, 0.25],  # Slice-2
                          [1.5, 0.75, 0.75],
                          [0.5, 0.25, 0.0]],
-                        [[0.75, 0.5, 0.75], # Slice-3
+                        [[0.75, 0.5, 0.75],  # Slice-3
                          [0.5, 0.25, 0.75],
                          [0.5, 0.5, 0.25]]], dtype=conf.dtype)
-        true_out = np.array([out, out*2])
+        true_out = np.array([out, out * 2])
 
         test(X, true_out, stride=2, rcp_field=(2, 2))
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -221,14 +212,14 @@ class TestPool(unittest.TestCase):
 
         print("tested_counter: %d  --  passed_counter: %d" % (tested_counter, passed_counter))
 
-
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
+
         def test(inp, unit_inp_grad, pool, stride=None, rcp_field=None):
             pool = Pool(inp, receptive_field=rcp_field, stride=stride, pool=pool)
             y = pool.forward(inp)
             inp_grad = np.ones_like(y, dtype=conf.dtype) if unit_inp_grad \
-                       else np.random.uniform(-1, 1, y.shape)
+                else np.random.uniform(-1, 1, y.shape)
 
             analytic_grad = pool.backward(inp_grad)
 
@@ -237,17 +228,16 @@ class TestPool(unittest.TestCase):
             for i in range(analytic_grad.shape[0]):
                 for j in range(analytic_grad.shape[1]):
                     for k in range(analytic_grad.shape[2]):
-                        for l in range(analytic_grad.shape[3]):
+                        for m in range(analytic_grad.shape[3]):
                             i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                            i_delta[i,j,k,l] = self.delta
+                            i_delta[i, j, k, m] = self.delta
                             lhs = pool.forward(inp + i_delta)
                             rhs = pool.forward(inp - i_delta)
-                            finite_diff_grad[i,j,k,l] = np.sum(((lhs-rhs) / (2*self.delta)) *
-                                                               inp_grad, keepdims=False)
+                            finite_diff_grad[i, j, k, m] = np.sum(((lhs - rhs) / (2 * self.delta)) *
+                                                                  inp_grad, keepdims=False)
 
             npt.assert_almost_equal(analytic_grad, finite_diff_grad, decimal=6)
             assert not np.isinf(analytic_grad).any()
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -269,8 +259,8 @@ class TestPool(unittest.TestCase):
 
             X = np.random.uniform(-scl, scl, (batch, dep, inp_h, inp_w))
 
-            test(X, unit_inp_grad=(True if unit else False), pool=pl, stride=(strd_r,strd_c),
-                 rcp_field=(k_h,k_w))
+            test(X, unit_inp_grad=(True if unit else False), pool=pl, stride=(strd_r, strd_c),
+                 rcp_field=(k_h, k_w))
 
 
 if __name__ == '__main__':

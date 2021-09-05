@@ -15,11 +15,12 @@ import itertools
 from pydl.nn.conv import Conv
 from pydl import conf
 
+
 class TestConv(unittest.TestCase):
     def unroll_input_volume(self, inp, w, batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad, strd,
                             frc_adjust=False):
-        input_padded = np.pad(inp, ((0,0),(0,0),(pad[0],pad[1]),(pad[0],pad[1])), 'constant') \
-                       if np.sum(pad) > 0 else inp
+        input_padded = np.pad(inp, ((0, 0), (0, 0), (pad[0], pad[1]), (pad[0], pad[1])),
+                              'constant') if np.sum(pad) > 0 else inp
         out_h = ((inp_h - k_h + np.sum(pad)) / strd) + 1
         out_w = ((inp_w - k_w + np.sum(pad)) / strd) + 1
         if frc_adjust:
@@ -44,16 +45,15 @@ class TestConv(unittest.TestCase):
         for b in range(batch):
             for row in range(out_rows):
                 for col in range(out_cols):
-                    inp_dep = int(col/kernal_size)
-                    inp_row = int(row/out_w)*strd + int((col%kernal_size)/k_w)
-                    inp_col = int(row%out_w)*strd + (col%k_w)
+                    inp_dep = int(col / kernal_size)
+                    inp_row = int(row / out_w) * strd + int((col % kernal_size) / k_w)
+                    inp_col = int(row % out_w) * strd + (col % k_w)
                     unrolled_inp[b, row, col] = input_padded[b, inp_dep, inp_row, inp_col]
 
         return unrolled_inp
 
-
     def test_score_fn(self):
-        def test(inp, w, true_out, bias=False, pad=(0,0), stride=1, rcp_field=None,
+        def test(inp, w, true_out, bias=False, pad=(0, 0), stride=1, rcp_field=None,
                  num_filters=None, frc_adjust=False):
             if true_out is None:
                 with npt.assert_raises(SystemExit):
@@ -71,27 +71,26 @@ class TestConv(unittest.TestCase):
                 out_volume = conv.score_fn(inp)
                 npt.assert_almost_equal(out_volume, true_out, decimal=8)
 
-
         # Manually calculated
         # -------------------
-        inp = np.array([[[2, 0, 0, 1, 2], # Slice-1
+        inp = np.array([[[2, 0, 0, 1, 2],  # Slice-1
                          [0, 1, 2, 0, 0],
                          [1, 1, 2, 0, 2],
                          [1, 1, 1, 1, 0],
                          [2, 0, 2, 2, 1]],
-                        [[1, 1, 1, 2, 1], # Slice-2
+                        [[1, 1, 1, 2, 1],  # Slice-2
                          [2, 1, 0, 0, 0],
                          [1, 2, 0, 1, 1],
                          [1, 2, 0, 2, 2],
                          [2, 0, 0, 1, 0]],
-                        [[1, 0, 1, 0, 2], # Slice-3
+                        [[1, 0, 1, 0, 2],  # Slice-3
                          [2, 0, 1, 0, 1],
                          [0, 2, 0, 1, 1],
                          [0, 0, 0, 0, 2],
                          [0, 2, 2, 0, 1]]], dtype=conf.dtype)
-        X = np.array([inp, inp*2])
+        X = np.array([inp, inp * 2])
 
-        w = np.array([[[[0, 1, 1], # Kernal-1
+        w = np.array([[[[0, 1, 1],  # Kernal-1
                         [1, 0, 1],
                         [1, 1, 1]],
                        [[0, 1, 1],
@@ -100,7 +99,7 @@ class TestConv(unittest.TestCase):
                        [[1, 1, 1],
                         [0, -1, 0],
                         [1, 1, 1]]],
-                      [[[-1, -1, -1], # Kernal-2
+                      [[[-1, -1, -1],  # Kernal-2
                         [1, 0, 0],
                         [0, 1, 0]],
                        [[-1, 0, -1],
@@ -112,16 +111,16 @@ class TestConv(unittest.TestCase):
 
         bias = np.array([1, 0], dtype=conf.dtype)
 
-        out = np.array([[[4, 7, 1], # Slice-1
+        out = np.array([[[4, 7, 1],  # Slice-1
                          [11, 12, 7],
                          [3, 5, 6]],
-                        [[1, 0, -1], # Slice-2
+                        [[1, 0, -1],  # Slice-2
                          [4, 2, 0],
                          [-4, -7, 0]]], dtype=conf.dtype)
-        true_out = np.array([out, out*2])
+        true_out = np.array([out, out * 2])
 
-        test(X, w, true_out+bias.reshape(2, 1, 1), bias=bias, pad=(1,1), stride=2, rcp_field=(3, 3),
-             num_filters=2)
+        test(X, w, true_out + bias.reshape(2, 1, 1), bias=bias, pad=(1, 1), stride=2,
+             rcp_field=(3, 3), num_filters=2)
 
         # Combinatorial Test Cases
         # ------------------------
@@ -146,8 +145,8 @@ class TestConv(unittest.TestCase):
             bias = np.random.rand(num_k)
             pad = (pad_0, pad_1)
 
-            out_height = (inp_h - k_h + np.sum(pad))/strd + 1
-            out_width = (inp_w - k_w + np.sum(pad))/strd + 1
+            out_height = (inp_h - k_h + np.sum(pad)) / strd + 1
+            out_width = (inp_w - k_w + np.sum(pad)) / strd + 1
 
             if (k_h > inp_h or k_w > inp_w):
                 continue
@@ -174,10 +173,10 @@ class TestConv(unittest.TestCase):
             test(X, w, true_out, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
                  num_filters=num_k, frc_adjust=force)
 
-
     def test_forward(self):
-        def test(inp, w, true_out, bias=False, pad=(0,0), stride=1, rcp_field=None, num_filters=None,
-                 actv_fn='ReLU', bchnorm=False, p=None, mask=None, frc_adjust=False):
+
+        def test(inp, w, true_out, bias=False, pad=(0, 0), stride=1, rcp_field=None, actv_fn='ReLU',
+                 num_filters=None, bchnorm=False, p=None, mask=None, frc_adjust=False):
             if pad[0] == pad[1]:
                 pad = pad[0]
             conv = Conv(inp, receptive_field=rcp_field, num_filters=num_filters, zero_padding=pad,
@@ -187,7 +186,6 @@ class TestConv(unittest.TestCase):
             conv.bias = bias
             out_volume = conv.forward(inp, mask=mask)
             npt.assert_almost_equal(out_volume, true_out, decimal=8)
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -214,8 +212,8 @@ class TestConv(unittest.TestCase):
             bias = np.random.rand(num_k)
             pad = (pad_0, pad_1)
 
-            out_height = (inp_h - k_h + np.sum(pad))/strd + 1
-            out_width = (inp_w - k_w + np.sum(pad))/strd + 1
+            out_height = (inp_h - k_h + np.sum(pad)) / strd + 1
+            out_width = (inp_w - k_w + np.sum(pad)) / strd + 1
 
             if (k_h > inp_h or k_w > inp_w):
                 continue
@@ -236,7 +234,7 @@ class TestConv(unittest.TestCase):
                                                     k_h, k_w, pad, strd, force)
 
             # Using element-wise multiplication with broadcasting for calculating weighted sum
-            weighted_sum = unrolled_inp[:,np.newaxis,:,:] * w.reshape(num_k, 1, -1)
+            weighted_sum = unrolled_inp[:, np.newaxis, :, :] * w.reshape(num_k, 1, -1)
             weighted_sum = np.sum(weighted_sum, axis=-1, keepdims=False) + bias.reshape(-1, 1)
             score = weighted_sum.reshape(-1, num_k, int(out_height), int(out_width))
 
@@ -269,10 +267,10 @@ class TestConv(unittest.TestCase):
             test(X, w, true_out_linear, bias=bias, pad=pad, stride=strd, rcp_field=(k_h, k_w),
                  num_filters=num_k, actv_fn='Linear', bchnorm=bn, p=p, mask=mask, frc_adjust=force)
 
-
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
-        def test(inp, w, inp_grad, actv_fn, bias=False, pad=(0,0), stride=1, rcp_field=None,
+
+        def test(inp, w, inp_grad, actv_fn, bias=False, pad=(0, 0), stride=1, rcp_field=None,
                  num_filters=None, bchnorm=False, p=None, mask=None):
             if pad[0] == pad[1]:
                 pad = pad[0]
@@ -280,7 +278,7 @@ class TestConv(unittest.TestCase):
                         stride=stride, activation_fn=actv_fn, batchnorm=bchnorm, dropout=p)
             conv.weights = w
             conv.bias = bias
-            y = conv.forward(inp, mask=mask)
+            _ = conv.forward(inp, mask=mask)
             inputs_grad = conv.backward(inp_grad)
             weights_grad = conv.weights_grad
             bias_grad = conv.bias_grad
@@ -290,15 +288,15 @@ class TestConv(unittest.TestCase):
             for i in range(weights_grad.shape[0]):
                 for j in range(weights_grad.shape[1]):
                     for k in range(weights_grad.shape[2]):
-                        for l in range(weights_grad.shape[3]):
+                        for m in range(weights_grad.shape[3]):
                             w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                            w_delta[i,j,k,l] = self.delta
+                            w_delta[i, j, k, m] = self.delta
                             conv.weights = w + w_delta
                             lhs = conv.forward(inp, mask=mask)
                             conv.weights = w - w_delta
                             rhs = conv.forward(inp, mask=mask)
-                            weights_finite_diff[i,j,k,l] = np.sum(((lhs - rhs) / (2 * self.delta)) *\
-                                                                  inp_grad)
+                            weights_finite_diff[i, j, k, m] = \
+                                np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
                             # Replace finite-diff gradients calculated close to 0 with NN calculated
                             # gradients to pass assertion test
@@ -306,7 +304,7 @@ class TestConv(unittest.TestCase):
                                                dtype=np.int32))
                             if grad_kink > 0:
                                 print("Weights - Kink Encountered!")
-                                weights_finite_diff[i,j] = weights_grad[i,j]
+                                weights_finite_diff[i, j] = weights_grad[i, j]
             conv.weights = w
 
             # Bias finite difference gradients
@@ -336,13 +334,13 @@ class TestConv(unittest.TestCase):
             for i in range(inputs_grad.shape[0]):
                 for j in range(inputs_grad.shape[1]):
                     for k in range(inputs_grad.shape[2]):
-                        for l in range(inputs_grad.shape[3]):
+                        for m in range(inputs_grad.shape[3]):
                             i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                            i_delta[i,j,k,l] = self.delta
+                            i_delta[i, j, k, m] = self.delta
                             lhs = conv.forward(inp + i_delta, mask=mask)
                             rhs = conv.forward(inp - i_delta, mask=mask)
-                            inputs_finite_diff[i,j,k,l] = np.sum(((lhs-rhs) / (2*self.delta)) *
-                                                                 inp_grad, keepdims=False)
+                            inputs_finite_diff[i, j, k, m] = \
+                                np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad, keepdims=False)
 
                             # Replace finite-diff gradients calculated close to 0 with NN calculated
                             # gradients to pass assertion test
@@ -350,12 +348,11 @@ class TestConv(unittest.TestCase):
                                                dtype=np.int32))
                             if grad_kink > 0:
                                 print("Inputs - Kink Encountered!")
-                                inputs_finite_diff[i,j,k] = inputs_grad[i,j,k]
+                                inputs_finite_diff[i, j, k] = inputs_grad[i, j, k]
 
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=2)
             npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=2)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -378,15 +375,16 @@ class TestConv(unittest.TestCase):
 
         for batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad_0, pad_1, strd, unit, actv, bn, dout, \
             force, scl in list(itertools.product(batch_size, inp_depth, inp_height, inp_width,
-            num_kernals, kernal_height, kernal_width, padding_0, padding_1, stride, unit_inp_grad,
-            activation_fn, batchnorm, dropout, force_adjust, scale)):
+                               num_kernals, kernal_height, kernal_width, padding_0, padding_1,
+                               stride, unit_inp_grad, activation_fn, batchnorm, dropout,
+                               force_adjust, scale)):
             X = np.random.uniform(-scl, scl, (batch, dep, inp_h, inp_w))
             w = np.random.randn(num_k, dep, k_h, k_w) * scl
             bias = np.random.rand(num_k) * scl
             pad = (pad_0, pad_1)
 
-            out_height = (inp_h - k_h + np.sum(pad))/strd + 1
-            out_width = (inp_w - k_w + np.sum(pad))/strd + 1
+            out_height = (inp_h - k_h + np.sum(pad)) / strd + 1
+            out_width = (inp_w - k_w + np.sum(pad)) / strd + 1
 
             if (k_h > inp_h or k_w > inp_w):
                 continue
@@ -407,20 +405,20 @@ class TestConv(unittest.TestCase):
             out_width = int(out_width)
 
             inp_grad = np.ones((batch, num_k, out_height, out_width), dtype=conf.dtype) if unit \
-                       else np.random.uniform(-1, 1, (batch, num_k, out_height, out_width))
+                else np.random.uniform(-1, 1, (batch, num_k, out_height, out_width))
 
             if dout:
                 p = np.random.rand()
                 mask = np.array(np.random.rand(batch, num_k, out_height, out_width) < p,
                                 dtype=conf.dtype)
                 if actv in ['Linear', 'ReLU']:
-                     mask /=  p
+                    mask /= p
             else:
                 p = None
                 mask = None
 
-            test(X, w, inp_grad, actv_fn=actv, bias=bias, pad=pad, stride=strd, rcp_field=(k_h,k_w),
-                 num_filters=num_k, bchnorm=bn, p=p, mask=mask)
+            test(X, w, inp_grad, actv_fn=actv, bias=bias, pad=pad, stride=strd, num_filters=num_k,
+                 rcp_field=(k_h, k_w), bchnorm=bn, p=p, mask=mask)
 
 
 if __name__ == '__main__':

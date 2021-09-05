@@ -15,6 +15,7 @@ import itertools
 from pydl.nn.dropout import Dropout
 from pydl import conf
 
+
 class TestDropout(unittest.TestCase):
     def test_forward(self):
         def test(inp, p, actvn_fn):

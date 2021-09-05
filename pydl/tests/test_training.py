@@ -15,17 +15,19 @@ import itertools
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
 from pydl.training.training import Training
-from pydl.training.training import SGD
 from pydl import conf
+
 
 class TestTraining(unittest.TestCase):
     def test_shuffle_split_data(self):
         self.maxDiff = None
+
         def test(X, y, y_onehot, shuffle, train_size=70, test_size=30, onehot=True):
             train = Training(nn=None, activatin_type='Dummy_Val')
             train_X, train_y, test_X, test_y = \
                 train.shuffle_split_data(X, (y if onehot is True else y_onehot), shuffle=shuffle,
-                                         train_size=train_size, test_size=test_size, y_onehot=onehot)
+                                         train_size=train_size, test_size=test_size,
+                                         y_onehot=onehot)
             concat_X = np.vstack((train_X, test_X))
             concat_y = np.vstack((train_y, test_y))
 
@@ -47,7 +49,7 @@ class TestTraining(unittest.TestCase):
                       [3, 4, 1, 2],
                       [4, 1, 2, 3]])
         y = np.array([3, 2, 1, 0])
-        y_onehot = np.zeros((y.size, y.max()+1))
+        y_onehot = np.zeros((y.size, y.max() + 1))
         y_onehot[np.arange(y.size), y] = 1
         test(X, y, y_onehot, shuffle=True, onehot=False)
         test(X, y, y_onehot, shuffle=False, onehot=True)
@@ -63,11 +65,10 @@ class TestTraining(unittest.TestCase):
                                                                   train_size, shuffle, onehot)):
             X = np.random.uniform(-1, 1, (batch, feat))
             y = np.random.randint(feat, size=(batch))
-            y[-1] = feat-1
-            y_onehot = np.zeros((y.size, y.max()+1))
+            y[-1] = feat - 1
+            y_onehot = np.zeros((y.size, y.max() + 1))
             y_onehot[np.arange(y.size), y] = 1
             test(X, y, y_onehot, shfl, t_sz, (100.0 - t_sz), oh)
-
 
     def test_mse_loss(self):
         def test(X, y, pred, true_out):
@@ -86,7 +87,6 @@ class TestTraining(unittest.TestCase):
             true_out = 0.5 * np.mean(np.square(y - pred))
             test(X, y, pred, true_out)
 
-
     def test_softmax_loss(self):
         def test(X, y, prob, true_out):
             train = Training(nn=None, activatin_type='Softmax')
@@ -103,14 +103,14 @@ class TestTraining(unittest.TestCase):
         k = X.shape[-1]
         # Case-1
         y = np.array([3, 2, 1, 0])
-        y_onehot = np.zeros((y.size, y.max()+1))
+        y_onehot = np.zeros((y.size, y.max() + 1))
         y_onehot[np.arange(y.size), y] = 1
         true_out = -np.log(0.4)
         test(X, y, prob, true_out)
         test(X, y_onehot, prob, true_out)
         # Case-2
         y = np.array([0, 1, 2, 3])
-        y_onehot = np.zeros((y.size, y.max()+1))
+        y_onehot = np.zeros((y.size, y.max() + 1))
         y_onehot[np.arange(y.size), y] = 1
         true_out = ((-np.log(0.1) * 2) + (-np.log(0.3) * 2)) / 4
         test(X, y, prob, true_out)
@@ -125,12 +125,11 @@ class TestTraining(unittest.TestCase):
             prob = X / np.sum(X, axis=-1, keepdims=True)
             k = X.shape[-1]
             y = np.random.randint(k, size=(X.shape[0]))
-            y_onehot = np.zeros((y.size, y.max()+1))
+            y_onehot = np.zeros((y.size, y.max() + 1))
             y_onehot[np.arange(y.size), y] = 1
             true_out = np.sum(y_onehot * -np.log(prob)) / batch
             test(X, y, prob, true_out)
             test(X, y_onehot, prob, true_out)
-
 
     def test_sigmoid_loss(self):
         def test(X, y, prob, true_out):
@@ -145,7 +144,7 @@ class TestTraining(unittest.TestCase):
         k = X.shape[-1]
         # Case-1
         y = np.array([0, 1, 2, 3, 4])
-        y_onehot = np.zeros((y.size, y.max()+1))
+        y_onehot = np.zeros((y.size, y.max() + 1))
         y_onehot[np.arange(y.size), y] = 1
         true_out = -np.log(1)
         test(X, y, prob, true_out)
@@ -160,9 +159,10 @@ class TestTraining(unittest.TestCase):
             prob = 1 / (1 + np.exp(-X))
             k = X.shape[-1]
             y = np.random.randint(k, size=(X.shape[0]))
-            y_onehot = np.zeros((y.size, y.max()+1))
+            y_onehot = np.zeros((y.size, y.max() + 1))
             y_onehot[np.arange(y.size), y] = 1
-            true_out = -np.sum((y_onehot * np.log(prob) + ((1 - y_onehot) * np.log(1 - prob)))) / batch
+            true_out = \
+                -np.sum((y_onehot * np.log(prob) + ((1 - y_onehot) * np.log(1 - prob)))) / batch
             test(X, y, prob, true_out)
             test(X, y_onehot, prob, true_out)
 
@@ -170,17 +170,17 @@ class TestTraining(unittest.TestCase):
             for mc in multiclass_onehot:
                 y = np.random.randint(k, size=(k))
                 mc[y] = 1
-            true_out = -np.sum((multiclass_onehot * np.log(prob) + ((1 - multiclass_onehot) * \
-                       np.log(1 - prob)))) / batch
+            true_out = -np.sum((multiclass_onehot * np.log(prob) + ((1 - multiclass_onehot) *
+                               np.log(1 - prob)))) / batch
             test(X, multiclass_onehot, prob, true_out)
-
 
     def test_loss_gradient_finite_diff(self):
         self.delta = 1e-3
+
         def test(X, y, layers, reg_lambda=0, regression=False):
             nn = NN(X, layers)
             train = Training(nn, reg_lambda=reg_lambda, regression=regression)
-            loss = train.loss(X, y)
+            _ = train.loss(X, y)
             loss_grad = train.loss_gradient(X, y)
             inputs_grad = nn.backward(loss_grad, reg_lambda=reg_lambda)
 
@@ -196,12 +196,12 @@ class TestTraining(unittest.TestCase):
                 for i in range(weights_grad.shape[0]):
                     for j in range(weights_grad.shape[1]):
                         w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                        w_delta[i,j] = self.delta
+                        w_delta[i, j] = self.delta
                         layer.weights = w + w_delta
                         lhs = train.loss(X, y)
                         layer.weights = w - w_delta
                         rhs = train.loss(X, y)
-                        weights_finite_diff[i,j] = (lhs - rhs) / (2 * self.delta)
+                        weights_finite_diff[i, j] = (lhs - rhs) / (2 * self.delta)
                 layer.weights = w
                 npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=5)
 
@@ -256,8 +256,8 @@ class TestTraining(unittest.TestCase):
             for i in range(inputs_grad.shape[0]):
                 for j in range(inputs_grad.shape[1]):
                     i_delta = np.zeros(X.shape, dtype=conf.dtype)
-                    i_delta[i,j] = self.delta
-                    inputs_finite_diff[i,j] = ((train.loss(X + i_delta, y) -
+                    i_delta[i, j] = self.delta
+                    inputs_finite_diff[i, j] = ((train.loss(X + i_delta, y) -
                                                 train.loss(X - i_delta, y)) / (2 * self.delta))
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=5)
 
@@ -270,16 +270,16 @@ class TestTraining(unittest.TestCase):
             l2 = FC(l1, num_neurons=15, activation_fn='Sigmoid', batchnorm=bn)
             l3 = FC(l2, num_neurons=11, activation_fn='Sigmoid', batchnorm=bn)
             l4 = FC(l3, num_neurons=9, activation_fn='Tanh', batchnorm=bn)
-            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=False) # SoftMax Probs
-            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=False) # Sigmoid Probs
-            l5_c = FC(l4, num_neurons=1, activation_fn='Sigmoid', batchnorm=False) # Binary Classification
-            l5_d = FC(l4, num_neurons=1, activation_fn='Linear', batchnorm=False) # Regression
+            l5_a = FC(l4, num_neurons=7, activation_fn='SoftMax', batchnorm=False)  # SoftMax Probs
+            l5_b = FC(l4, num_neurons=7, activation_fn='Sigmoid', batchnorm=False)  # Sigmoid Probs
+            l5_c = FC(l4, num_neurons=1, activation_fn='Sigmoid', batchnorm=False)  # Binary Classif
+            l5_d = FC(l4, num_neurons=1, activation_fn='Linear', batchnorm=False)  # Regression
 
             # SoftMax Probs
             layers = [l1, l2, l3, l4, l5_a]
             k = layers[-1].shape[-1]
             labels = np.random.randint(k, size=(X.shape[0]))
-            labels_onehot = np.zeros((labels.size, labels.max()+1))
+            labels_onehot = np.zeros((labels.size, labels.max() + 1))
             labels_onehot[np.arange(labels.size), labels] = 1
 
             reg_list = [0, 1e-6, 1e-3, 1e-0]
@@ -291,7 +291,7 @@ class TestTraining(unittest.TestCase):
             layers = [l1, l2, l3, l4, l5_b]
             k = layers[-1].shape[-1]
             labels = np.random.randint(k, size=(X.shape[0]))
-            labels_onehot = np.zeros((labels.size, labels.max()+1))
+            labels_onehot = np.zeros((labels.size, labels.max() + 1))
             labels_onehot[np.arange(labels.size), labels] = 1
             multiclass_onehot = np.zeros_like(labels_onehot)
             for mc in multiclass_onehot:
@@ -307,7 +307,7 @@ class TestTraining(unittest.TestCase):
             layers = [l1, l2, l3, l4, l5_c]
             k = 2
             labels = np.random.randint(k, size=(X.shape[0]))
-            labels = np.reshape(labels, newshape=(-1,1))
+            labels = np.reshape(labels, newshape=(-1, 1))
 
             reg_list = [0, 1e-6, 1e-3, 1e-0]
             y_list = [labels]
@@ -320,6 +320,7 @@ class TestTraining(unittest.TestCase):
             reg_list = [0, 1e-6, 1e-3, 1e-0]
             for reg in reg_list:
                 test(X, y, layers, reg_lambda=reg, regression=True)
+
 
 if __name__ == '__main__':
     unittest.main()

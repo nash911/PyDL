@@ -15,6 +15,7 @@ import itertools
 from pydl.nn.batchnorm import BatchNorm
 from pydl import conf
 
+
 class TestBatchNorm(unittest.TestCase):
     def test_forward(self):
         def test(inp):
@@ -42,12 +43,12 @@ class TestBatchNorm(unittest.TestCase):
             test(X_uniform)
             test(X_normal)
 
-
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-4
+
         def test(inp, gamma, beta, inp_grad):
             bn = BatchNorm(gamma=gamma, beta=beta, feature_size=inp.shape[-1])
-            bn_fwd = bn.forward(inp)
+            _ = bn.forward(inp)
             x_grad = bn.backward(inp_grad)
             gamma_grad = bn.gamma_grad
             beta_grad = bn.beta_grad
@@ -89,7 +90,6 @@ class TestBatchNorm(unittest.TestCase):
             npt.assert_almost_equal(beta_grad, beta_finite_diff, decimal=3)
             npt.assert_almost_equal(x_grad, inputs_finite_diff, decimal=3)
 
-
         # Manually calculated
         # -------------------
         X = np.reshape(np.arange(320, dtype=conf.dtype), (16, 20))
@@ -114,7 +114,7 @@ class TestBatchNorm(unittest.TestCase):
                 gamma = np.random.randn(feat)
                 beta = np.random.randn(feat)
                 inp_grad = np.ones((batch, feat), dtype=conf.dtype) if unit else \
-                           np.random.uniform(-0.0001, 0.0001, (batch, feat))
+                    np.random.uniform(-0.0001, 0.0001, (batch, feat))
                 test(X_normal, gamma, beta, inp_grad)
                 test(X_uniform, gamma, beta, inp_grad)
 

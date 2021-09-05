@@ -15,6 +15,7 @@ import itertools
 from pydl.nn.layers import FC
 from pydl import conf
 
+
 class TestLayers(unittest.TestCase):
     def test_score_fn(self):
         def test(inp, w, true_out, bias=False):
@@ -33,7 +34,7 @@ class TestLayers(unittest.TestCase):
         true_out = np.array([[38, 44, 50, 56],
                              [83, 98, 113, 128]], dtype=conf.dtype)
         test(X, w, true_out)
-        test(X, w, true_out+bias, bias)
+        test(X, w, true_out + bias, bias)
 
         # Combinatorial Test Cases
         # ------------------------
@@ -49,8 +50,7 @@ class TestLayers(unittest.TestCase):
             bias = np.zeros(neur)
             true_out = np.matmul(X, w)
             test(X, w, true_out)
-            test(X, w, true_out+bias, bias)
-
+            test(X, w, true_out + bias, bias)
 
     def test_forward(self):
         def test(inp, w, true_out, bias=False, actv_fn='Sigmoid', bchnorm=False, p=None, mask=None):
@@ -69,7 +69,7 @@ class TestLayers(unittest.TestCase):
                               [83, 98, 113, 128]], dtype=conf.dtype)
         true_out = 1.0 / (1.0 + np.exp(-score_out))
         test(X, w, true_out)
-        true_out = 1.0 / (1.0 + np.exp(-(score_out+bias)))
+        true_out = 1.0 / (1.0 + np.exp(-(score_out + bias)))
         test(X, w, true_out, bias)
 
         # Combinatorial Test Cases
@@ -130,7 +130,6 @@ class TestLayers(unittest.TestCase):
                 true_out_linear *= mask
             test(X, w, true_out_linear, bias, actv_fn='Linear', bchnorm=bn, p=p, mask=mask)
 
-
     def test_gradients_manually(self):
         def test(inp, w, inp_grad, true_weights_grad, true_inputs_grad, bias=False,
                  true_bias_grad=None):
@@ -172,9 +171,9 @@ class TestLayers(unittest.TestCase):
                                      [20, 52, 84]], dtype=conf.dtype)
         test(X, w, inp_grad, true_weights_grad, true_inputs_grad, bias, true_bias_grad)
 
-
     def test_gradients_finite_difference(self):
         self.delta = 1e-5
+
         def test(inp, w, inp_grad, bias=False):
             fc = FC(inp, w.shape[-1], w, bias)
             weights_grad = fc.weight_gradients(inp_grad, inputs=X)
@@ -188,7 +187,7 @@ class TestLayers(unittest.TestCase):
                 w_delta[i] = self.delta
                 weights_finite_diff[i] = np.sum(((fc.score_fn(inp, w + w_delta) -
                                                   fc.score_fn(inp, w - w_delta)) /
-                                                  (2 * self.delta)) * inp_grad, axis=0)
+                                                 (2 * self.delta)) * inp_grad, axis=0)
 
             # Bias finite difference gradients
             fc.bias = bias + self.delta
@@ -202,11 +201,11 @@ class TestLayers(unittest.TestCase):
             inputs_finite_diff = np.empty(inputs_grad.shape)
             for i in range(inputs_grad.shape[1]):
                 i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                i_delta[:,i] = self.delta
-                inputs_finite_diff[:,i] = np.sum(((fc.score_fn(inp + i_delta, w) -
+                i_delta[:, i] = self.delta
+                inputs_finite_diff[:, i] = np.sum(((fc.score_fn(inp + i_delta, w) -
                                                    fc.score_fn(inp - i_delta, w)) /
-                                                   (2 * self.delta)) * inp_grad, axis=-1,
-                                                 keepdims=False)
+                                                  (2 * self.delta)) * inp_grad, axis=-1,
+                                                  keepdims=False)
 
             # Threshold Gradient Diff Check
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=5)
@@ -227,8 +226,8 @@ class TestLayers(unittest.TestCase):
             # max_abs_inp_grads = np.maximum(np.abs(inputs_grad), np.abs(inputs_finite_diff))
             # max_abs_inp_grads[max_abs_inp_grads==0] = 1
             # inp_grads_accuracy = np.abs(inputs_grad - inputs_finite_diff) / max_abs_inp_grads
-            # npt.assert_almost_equal(np.zeros_like(inp_grads_accuracy), inp_grads_accuracy, decimal=5)
-
+            # npt.assert_almost_equal(np.zeros_like(inp_grads_accuracy), inp_grads_accuracy,
+            #                         decimal=5)
 
         # Manually calculated - Unit input gradients
         X = np.array([[1, 2, 3],
@@ -267,16 +266,17 @@ class TestLayers(unittest.TestCase):
             bias = np.random.rand(neur) * scl
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
-                       np.random.uniform(-10, 10, (batch, neur))
+                np.random.uniform(-10, 10, (batch, neur))
             test(X, w, inp_grad, bias)
-
 
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
+
         def test(inp, w, inp_grad, bias=False, actv_fn='Sigmoid', batchnorm=False, p=None,
                  mask=None):
-            fc = FC(inp, w.shape[-1], w, bias, activation_fn=actv_fn, batchnorm=batchnorm, dropout=p)
-            y = fc.forward(inp, mask=mask)
+            fc = FC(inp, w.shape[-1], w, bias, activation_fn=actv_fn, batchnorm=batchnorm,
+                    dropout=p)
+            _ = fc.forward(inp, mask=mask)
             inputs_grad = fc.backward(inp_grad)
             weights_grad = fc.weights_grad
             bias_grad = fc.bias_grad
@@ -286,18 +286,18 @@ class TestLayers(unittest.TestCase):
             for i in range(weights_grad.shape[0]):
                 for j in range(weights_grad.shape[1]):
                     w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                    w_delta[i,j] = self.delta
+                    w_delta[i, j] = self.delta
                     fc.weights = w + w_delta
                     lhs = fc.forward(inp, mask=mask)
                     fc.weights = w - w_delta
                     rhs = fc.forward(inp, mask=mask)
-                    weights_finite_diff[i,j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
+                    weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
                     # Replace finite-diff gradients calculated close to 0 with NN calculated
                     # gradients to pass assertion test
                     grad_kink = np.sum(np.array(np.logical_xor(lhs > 0, rhs > 0), dtype=np.int32))
                     if grad_kink > 0:
-                        weights_finite_diff[i,j] = weights_grad[i,j]
+                        weights_finite_diff[i, j] = weights_grad[i, j]
             fc.weights = w
 
             # Bias finite difference gradients
@@ -323,17 +323,17 @@ class TestLayers(unittest.TestCase):
             for i in range(inputs_grad.shape[0]):
                 for j in range(inputs_grad.shape[1]):
                     i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                    i_delta[i,j] = self.delta
+                    i_delta[i, j] = self.delta
                     lhs = fc.forward(inp + i_delta, mask=mask)
                     rhs = fc.forward(inp - i_delta, mask=mask)
-                    inputs_finite_diff[i,j] = np.sum(((lhs-rhs) / (2*self.delta)) * inp_grad,
-                                                     keepdims=False)
+                    inputs_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad,
+                                                      keepdims=False)
 
                     # Replace finite-diff gradients calculated close to 0 with NN calculated
                     # gradients to pass assertion test
                     grad_kink = np.sum(np.array(np.logical_xor(lhs > 0, rhs > 0), dtype=np.int32))
                     if grad_kink > 0:
-                        inputs_finite_diff[i,j] = inputs_grad[i,j]
+                        inputs_finite_diff[i, j] = inputs_grad[i, j]
 
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=2)
             npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=2)
@@ -357,7 +357,7 @@ class TestLayers(unittest.TestCase):
                 p = np.random.rand()
                 mask = np.array(np.random.rand(*inp_grad.shape) < p, dtype=conf.dtype)
                 if actv in ['Linear', 'ReLU']:
-                     mask /=  p
+                    mask /= p
             else:
                 p = None
                 mask = None
@@ -382,7 +382,7 @@ class TestLayers(unittest.TestCase):
                 p = np.random.rand()
                 mask = np.array(np.random.rand(*inp_grad.shape) < p, dtype=conf.dtype)
                 if actv in ['Linear', 'ReLU']:
-                     mask /=  p
+                    mask /= p
             else:
                 p = None
                 mask = None
@@ -411,13 +411,13 @@ class TestLayers(unittest.TestCase):
             bias = np.zeros(neur)
 
             inp_grad = np.ones((batch, neur), dtype=conf.dtype) if unit else \
-                       np.random.uniform(-1, 1, (batch, neur))
+                np.random.uniform(-1, 1, (batch, neur))
 
             if dout:
                 p = np.random.rand()
                 mask = np.array(np.random.rand(batch, neur) < p, dtype=conf.dtype)
                 if actv in ['Linear', 'ReLU']:
-                     mask /=  p
+                    mask /= p
             else:
                 p = None
                 mask = None

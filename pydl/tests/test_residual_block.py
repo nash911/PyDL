@@ -16,12 +16,13 @@ from pydl.nn.conv import Conv
 from pydl.nn.residual_block import ResidualBlock
 from pydl import conf
 
+
 class TestResidualBlock(unittest.TestCase):
     def unroll_input_volume(self, inp, w, batch, dep, inp_h, inp_w, num_k, k_h, k_w, pad, strd):
-        input_padded = np.pad(inp, ((0,0),(0,0),(pad,pad),(pad,pad)), 'constant') \
-                       if pad > 0 else inp
-        out_h = int((inp_h - k_h + (2*pad)) / strd) + 1
-        out_w = int((inp_w - k_w + (2*pad)) / strd) + 1
+        input_padded = np.pad(inp, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant') \
+            if pad > 0 else inp
+        out_h = int((inp_h - k_h + (2 * pad)) / strd) + 1
+        out_w = int((inp_w - k_w + (2 * pad)) / strd) + 1
         out_rows = out_h * out_w
         out_cols = w[0].size
         unrolled_inp_shape = tuple((batch, out_rows, out_cols))
@@ -31,13 +32,12 @@ class TestResidualBlock(unittest.TestCase):
         for b in range(batch):
             for row in range(out_rows):
                 for col in range(out_cols):
-                    inp_dep = int(col/kernal_size)
-                    inp_row = int(row/out_w)*strd + int((col%kernal_size)/k_w)
-                    inp_col = int(row%out_w)*strd + (col%k_w)
+                    inp_dep = int(col / kernal_size)
+                    inp_row = int(row / out_w) * strd + int((col % kernal_size) / k_w)
+                    inp_col = int(row % out_w) * strd + (col % k_w)
                     unrolled_inp[b, row, col] = input_padded[b, inp_dep, inp_row, inp_col]
 
         return unrolled_inp
-
 
     def test_forward(self):
         def test(inp, weights, skip_weights, true_out, pad=0, stride=1, rcp_field=None,
@@ -45,8 +45,8 @@ class TestResidualBlock(unittest.TestCase):
             conv_layers = [inp]
             for i, (w, b) in enumerate(weights):
                 conv = Conv(conv_layers[-1], receptive_field=rcp_field, num_filters=num_filters,
-                            zero_padding=pad, stride=(stride if i==0 else 1), activation_fn=actv_fn,
-                            batchnorm=bchnorm)
+                            zero_padding=pad, stride=(stride if i == 0 else 1), batchnorm=bchnorm,
+                            activation_fn=actv_fn)
                 conv.weights = w
                 conv.bias = b
                 conv_layers.append(conv)
@@ -59,7 +59,6 @@ class TestResidualBlock(unittest.TestCase):
 
             out_volume = res_block.forward(inp)
             npt.assert_almost_equal(out_volume, true_out, decimal=8)
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -82,7 +81,7 @@ class TestResidualBlock(unittest.TestCase):
             X = np.random.uniform(-1, 1, (batch, dep, inp_h, inp_w))
 
             # Calculate pad size based on kernal size
-            pad = int((ker-1)/2)
+            pad = int((ker - 1) / 2)
 
             weights = list()
             layer_inp = X
@@ -98,16 +97,16 @@ class TestResidualBlock(unittest.TestCase):
                 weights.append(tuple((w, b)))
 
                 # Calculate layer's output size
-                out_height = (layer_inp.shape[2] - ker + (2*pad))/(strd if i==0 else 1) + 1
-                out_width = (layer_inp.shape[3] - ker + (2*pad))/(strd if i==0 else 1) + 1
+                out_height = (layer_inp.shape[2] - ker + (2 * pad)) / (strd if i == 0 else 1) + 1
+                out_width = (layer_inp.shape[3] - ker + (2 * pad)) / (strd if i == 0 else 1) + 1
 
                 # Unroll layer's inputs
                 unrolled_inp = self.unroll_input_volume(layer_inp, w, batch, inp_dep, layer_inp_h,
                                                         layer_inp_w, num_k, ker, ker, pad,
-                                                        (strd if i==0 else 1))
+                                                        (strd if i == 0 else 1))
 
                 # Using element-wise multiplication with broadcasting for calculating weighted sum
-                weighted_sum = unrolled_inp[:,np.newaxis,:,:] * w.reshape(num_k, 1, -1)
+                weighted_sum = unrolled_inp[:, np.newaxis, :, :] * w.reshape(num_k, 1, -1)
                 weighted_sum = np.sum(weighted_sum, axis=-1, keepdims=False) + b.reshape(-1, 1)
                 score = weighted_sum.reshape(-1, num_k, int(out_height), int(out_width))
 
@@ -116,9 +115,9 @@ class TestResidualBlock(unittest.TestCase):
                     score = (score - np.mean(score, axis=0)) / np.sqrt(np.var(score, axis=0) +
                                                                        1e-32)
 
-                if i == n_layers-1: # Skip activation for the final layer in the block
+                if i == n_layers - 1:  # Skip activation for the final layer in the block
                     layer_out = score
-                else: # Else apply the appropriate activation for the later's score
+                else:  # Else apply the appropriate activation for the later's score
                     if actv_fn == 'Tanh':
                         layer_out = (2.0 / (1.0 + np.exp(-2.0 * score))) - 1.0
                     elif actv_fn == 'ReLU':
@@ -132,8 +131,8 @@ class TestResidualBlock(unittest.TestCase):
             # If there is a size mismatch between the volumes of the skip connection and the block
             # output, then perform a linear transformation to resize the skip_connection
             if layer_out.shape != X.shape:
-                out_height = (inp_h - 1 + 0)/strd + 1
-                out_width = (inp_w - 1 + 0)/strd + 1
+                out_height = (inp_h - 1 + 0) / strd + 1
+                out_width = (inp_w - 1 + 0) / strd + 1
                 out_dep = layer_out.shape[1]
 
                 w_skip = np.random.randn(out_dep, dep, 1, 1) * 1.0
@@ -143,7 +142,7 @@ class TestResidualBlock(unittest.TestCase):
                                                         out_dep, 1, 1, 0, strd)
 
                 # Using element-wise multiplication with broadcasting for calculating weighted sum
-                weighted_sum = unrolled_inp[:,np.newaxis,:,:] * w_skip.reshape(out_dep, 1, -1)
+                weighted_sum = unrolled_inp[:, np.newaxis, :, :] * w_skip.reshape(out_dep, 1, -1)
                 weighted_sum = np.sum(weighted_sum, axis=-1, keepdims=False) + b_skip.reshape(-1, 1)
                 score = weighted_sum.reshape(-1, out_dep, int(out_height), int(out_width))
 
@@ -165,20 +164,19 @@ class TestResidualBlock(unittest.TestCase):
             elif actv_fn == 'Linear':
                 true_out = block_score
 
-
             test(X, weights, skip_weights, true_out, pad=pad, stride=strd, rcp_field=(ker, ker),
                  num_filters=num_k, actv_fn=actv_fn, bchnorm=bn)
 
-
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-8
+
         def test(inp, weights, actv_fn, pad=0, stride=1, rcp_field=None, num_filters=None,
                  bchnorm=False):
             conv_layers = [inp]
             for i, (w, b) in enumerate(weights):
                 conv = Conv(conv_layers[-1], receptive_field=rcp_field, num_filters=num_filters,
-                            zero_padding=pad, stride=(stride if i==0 else 1), activation_fn=actv_fn,
-                            batchnorm=bchnorm)
+                            zero_padding=pad, stride=(stride if i == 0 else 1), batchnorm=bchnorm,
+                            activation_fn=actv_fn)
                 conv.weights = w
                 conv.bias = b
                 conv_layers.append(conv)
@@ -221,15 +219,15 @@ class TestResidualBlock(unittest.TestCase):
                 for i in range(w_grad.shape[0]):
                     for j in range(w_grad.shape[1]):
                         for k in range(w_grad.shape[2]):
-                            for l in range(w_grad.shape[3]):
+                            for m in range(w_grad.shape[3]):
                                 w_delta = np.zeros(w.shape, dtype=conf.dtype)
-                                w_delta[i,j,k,l] = self.delta
+                                w_delta[i, j, k, m] = self.delta
                                 layer.weights = w + w_delta
                                 lhs = res_block.forward(inp)
                                 layer.weights = w - w_delta
                                 rhs = res_block.forward(inp)
-                                w_fin_diff[i,j,k,l] = np.sum(((lhs - rhs) / (2 * self.delta)) *
-                                                             inp_grad)
+                                w_fin_diff[i, j, k, m] = np.sum(((lhs - rhs) / (2 * self.delta)) *
+                                                                inp_grad)
 
                                 # Replace finite-diff gradients calculated close to 0 with NN
                                 # calculated gradients to pass assertion test
@@ -238,7 +236,7 @@ class TestResidualBlock(unittest.TestCase):
                                                             dtype=np.int32))
                                 if grad_kink > 0:
                                     print("Weights - Kink Encountered!")
-                                    w_fin_diff[i,j,k,l] = w_grad[i,j,k,l]
+                                    w_fin_diff[i, j, k, m] = w_grad[i, j, k, m]
                 layer.weights = w
                 weights_finite_diff.append(w_fin_diff)
 
@@ -274,15 +272,15 @@ class TestResidualBlock(unittest.TestCase):
                 for i in range(skip_w_grad.shape[0]):
                     for j in range(skip_w_grad.shape[1]):
                         for k in range(skip_w_grad.shape[2]):
-                            for l in range(skip_w_grad.shape[3]):
+                            for m in range(skip_w_grad.shape[3]):
                                 skip_w_delta = np.zeros(skip_weights.shape, dtype=conf.dtype)
-                                skip_w_delta[i,j,k,l] = self.delta
+                                skip_w_delta[i, j, k, m] = self.delta
                                 res_block.skip_convolution.weights = skip_weights + skip_w_delta
                                 lhs = res_block.forward(inp)
                                 res_block.skip_convolution.weights = skip_weights - skip_w_delta
                                 rhs = res_block.forward(inp)
-                                skip_w_fin_diff[i,j,k,l] = np.sum(((lhs - rhs) / (2 * self.delta)) *
-                                                                  inp_grad)
+                                skip_w_fin_diff[i, j, k, m] = \
+                                    np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad)
 
                                 # Replace finite-diff gradients calculated close to 0 with NN
                                 # calculated gradients to pass assertion test
@@ -291,7 +289,7 @@ class TestResidualBlock(unittest.TestCase):
                                                             dtype=np.int32))
                                 if grad_kink > 0:
                                     print("Skip Weights - Kink Encountered!")
-                                    skip_w_fin_diff[i,j,k,l] = skip_w_grad[i,j,k,l]
+                                    skip_w_fin_diff[i, j, k, m] = skip_w_grad[i, j, k, m]
                 res_block.skip_convolution.weights = skip_weights
 
                 # Bias finite difference gradients
@@ -323,13 +321,13 @@ class TestResidualBlock(unittest.TestCase):
             for i in range(inputs_grad.shape[0]):
                 for j in range(inputs_grad.shape[1]):
                     for k in range(inputs_grad.shape[2]):
-                        for l in range(inputs_grad.shape[3]):
+                        for m in range(inputs_grad.shape[3]):
                             i_delta = np.zeros(inp.shape, dtype=conf.dtype)
-                            i_delta[i,j,k,l] = self.delta
+                            i_delta[i, j, k, m] = self.delta
                             lhs = res_block.forward(inp + i_delta)
                             rhs = res_block.forward(inp - i_delta)
-                            inputs_finite_diff[i,j,k,l] = np.sum(((lhs-rhs) / (2*self.delta)) *
-                                                                 inp_grad, keepdims=False)
+                            inputs_finite_diff[i, j, k, m] = \
+                                np.sum(((lhs - rhs) / (2 * self.delta)) * inp_grad, keepdims=False)
 
                             # Replace finite-diff gradients calculated close to 0 with NN calculated
                             # gradients to pass assertion test
@@ -338,10 +336,10 @@ class TestResidualBlock(unittest.TestCase):
                                                         dtype=np.int32))
                             if grad_kink > 0:
                                 print("Inputs - Kink Encountered!")
-                                inputs_finite_diff[i,j,k,l] = inputs_grad[i,j,k,l]
+                                inputs_finite_diff[i, j, k, m] = inputs_grad[i, j, k, m]
 
             for i, (w_grad, w_fin_diff, b_grad, b_fin_diff) in \
-                enumerate(zip(weights_grad, weights_finite_diff, bias_grad, bias_finite_diff)):
+                    enumerate(zip(weights_grad, weights_finite_diff, bias_grad, bias_finite_diff)):
                 npt.assert_almost_equal(w_grad, w_fin_diff, decimal=2)
                 npt.assert_almost_equal(b_grad, b_fin_diff, decimal=2)
 
@@ -350,7 +348,6 @@ class TestResidualBlock(unittest.TestCase):
                 npt.assert_almost_equal(skip_b_grad, skip_b_fin_diff, decimal=2)
 
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=2)
-
 
         # Combinatorial Test Cases
         # ------------------------
@@ -362,8 +359,8 @@ class TestResidualBlock(unittest.TestCase):
         num_kernals = [1, 2, 3]
         kernal = [1, 3]
         stride = [1, 2]
-        batchnorm = [True] # [True, False]
-        activationv_function = ['ReLU'] # ['Linear', 'Tanh', 'ReLU']
+        batchnorm = [True, False]
+        activationv_function = ['Linear', 'Tanh', 'ReLU']
 
         for n_layers, batch, dep, inp_h, inp_w, num_k, ker, strd, bn, actv in \
             list(itertools.product(num_layers, batch_size, inp_depth, inp_height, inp_width,
@@ -373,7 +370,7 @@ class TestResidualBlock(unittest.TestCase):
             X = np.random.uniform(-1, 1, (batch, dep, inp_h, inp_w))
 
             # Calculate pad size based on kernal size
-            pad = int((ker-1)/2)
+            pad = int((ker - 1) / 2)
 
             weights = list()
             inp_dep = dep
