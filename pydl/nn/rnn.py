@@ -227,7 +227,7 @@ class RNN(Layer):
             hidden_grad = np.sum(hidden_grad, axis=-1, keepdims=False)
         return hidden_grad
 
-    def forward(self, inputs, inference=False, mask=None):
+    def forward(self, inputs, inference=False, mask=None, temperature=1.0):
         if len(inputs.shape) > 2:  # Preceeding layer is a Convolution/Pooling layer or 3D inputs
             # Unroll inputs
             batch_size = inputs.shape[0]
@@ -277,19 +277,19 @@ class RNN(Layer):
         if self._has_bias:
             self._bias += -alpha * self._bias_grad
 
-        self.reset_gradients()
-
-        # Reset hidden state (h_0) to output of the final hidden-step (h_T)
-        hidden_state = list(self._output.values())[-1]
-        self._inputs = OrderedDict()
-        self._output = OrderedDict()
-        self._output[0] = hidden_state
+        self.reset()
 
     def reset(self):
         self.reset_gradients()
-        self.reset_hidden_state(hidden_state=list(self._output.values())[-1])
+        self.reset_hidden_state(hidden_state='previous_state')
 
     def reset_hidden_state(self, hidden_state=None):
+        try:
+            if hidden_state.lower() == 'previous_state':
+                hidden_state = list(self._output.values())[-1]
+        except AttributeError:
+            pass
+
         self._inputs = OrderedDict()
         self._output = OrderedDict()
         if hidden_state is None:

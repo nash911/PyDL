@@ -359,7 +359,7 @@ class Conv(Layer):
 
         return out_grads
 
-    def forward(self, inputs, inference=False, mask=None):
+    def forward(self, inputs, inference=False, mask=None, temperature=1.0):
         # Sum of weighted inputs
         z = self.score_fn(inputs)
 

@@ -7,15 +7,13 @@
 # This code is licensed under MIT license (see LICENSE.txt for details)
 # ------------------------------------------------------------------------
 
-import abc
 from abc import ABC, abstractmethod
 import numpy as np
-import itertools
 
-from pydl import conf
 
 class Activation(ABC):
     """An abstract class defining the interface of Activation function.
+
     Args:
         name (str): Name of the activation function.
     """
@@ -48,14 +46,12 @@ class Activation(ABC):
 
 
 class Linear(Activation):
-    """The Linear Activation Class
-    """
+    """The Linear Activation Class."""
 
     def __init__(self, name=None):
         super().__init__(name=name, type='Linear')
 
-
-    def forward(self, inputs):
+    def forward(self, inputs, temperature=1.0):
         return inputs
 
     def backward(self, inp_grad, inputs=None):
@@ -63,14 +59,12 @@ class Linear(Activation):
 
 
 class Sigmoid(Activation):
-    """The Sigmoid Class
-    """
+    """The Sigmoid Class."""
 
     def __init__(self, name=None):
         super().__init__(name=name, type='Sigmoid')
 
-
-    def forward(self, inputs):
+    def forward(self, inputs, temperature=1.0):
         self._inputs = inputs
         self._outputs = 1.0 / (1.0 + np.exp(-inputs))
         return self._outputs
@@ -89,16 +83,14 @@ class Sigmoid(Activation):
 
 
 class Tanh(Activation):
-    """The Tanh Class
-    """
+    """The Tanh Class."""
 
     def __init__(self, name=None):
         super().__init__(name=name, type='Tanh')
 
-
-    def forward(self, inputs):
+    def forward(self, inputs, temperature=1.0):
         self._inputs = inputs
-        self._outputs = (2.0 / (1.0 + np.exp(-2.0*inputs))) - 1.0
+        self._outputs = (2.0 / (1.0 + np.exp(-2.0 * inputs))) - 1.0
         return self._outputs
 
     def backward(self, inp_grad, inputs=None):
@@ -115,13 +107,14 @@ class Tanh(Activation):
 
 
 class SoftMax(Activation):
-    """The SoftMax Class
-    """
+    """The SoftMax Class."""
 
     def __init__(self, name=None):
         super().__init__(name=name, type='SoftMax')
 
-    def forward(self, inputs):
+    def forward(self, inputs, temperature=1.0):
+        if temperature != 1.0:
+            inputs /= temperature
         # Normalization trick to avoid overflow
         self._inputs = inputs - np.amax(inputs, axis=-1, keepdims=True)
         self._outputs = np.exp(self._inputs) / np.sum(np.exp(self._inputs), axis=-1, keepdims=True)
@@ -137,9 +130,9 @@ class SoftMax(Activation):
         num_neurons = self._outputs.shape[-1]
 
         # A syntactic sugar implementation
-        delta_ij = np.array([np.eye(num_neurons)]*batch_size) * self._outputs[:,np.newaxis,:]
-        out_grad = np.sum((-(self._outputs[:,:,np.newaxis] * self._outputs[:,np.newaxis,:]) +
-                           delta_ij) * inp_grad[:,np.newaxis,:], axis=-1)
+        delta_ij = np.array([np.eye(num_neurons)] * batch_size) * self._outputs[:, np.newaxis, :]
+        out_grad = np.sum((-(self._outputs[:, :, np.newaxis] * self._outputs[:, np.newaxis, :]) +
+                           delta_ij) * inp_grad[:, np.newaxis, :], axis=-1)
 
         # # Syntactic sugar implementation - Has a slight better performance (~5%)
         # out_squared = -(self._outputs[:,:,np.newaxis] * self._outputs[:,np.newaxis,:])
@@ -153,13 +146,12 @@ class SoftMax(Activation):
 
 
 class ReLU(Activation):
-    """The ReLU Class
-    """
+    """The ReLU Class."""
 
     def __init__(self, name=None):
         super().__init__(name=name, type='ReLU')
 
-    def forward(self, inputs):
+    def forward(self, inputs, temperature=1.0):
         self._inputs = inputs
         self._outputs = np.maximum(0, inputs)
         return self._outputs

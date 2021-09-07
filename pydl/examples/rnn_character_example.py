@@ -26,15 +26,15 @@ def get_data(file_path, seq_len):
 
 
 def main():
-    seq_len = 25
+    seq_len = 50
     weight_scale = 1e-2
 
-    data, X, K = get_data('data/my_text_data.txt', seq_len)
+    data, X, K = get_data('data/paulgraham_essays.txt', seq_len)
 
     print("X.shape: ", X.shape)
     print("K: ", K)
 
-    l1 = RNN(X, num_neurons=100, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
+    l1 = RNN(X, num_neurons=200, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
              activation_fn='Sigmoid', name="RNN-1")
     l2 = FC(l1, num_neurons=K, bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='SoftMax', name="Output-Layer")
@@ -42,9 +42,9 @@ def main():
 
     nn = NN(None, layers)
 
-    sgd = SGD(nn, step_size=1e-1, reg_lambda=0, train_size=X.shape[0] - 1, test_size=0)
-    sgd.train_rnn(data, batch_size=seq_len, epochs=10000, sample_length=500, log_freq=1,
-                  plot='Character-RNN - SGD')
+    sgd = SGD(nn, step_size=1e-1, reg_lambda=0, train_size=90, test_size=10)
+    sgd.train_rnn(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
+                  log_freq=1, plot='Character-RNN - SGD')
 
     input("Press Enter to continue...")
 

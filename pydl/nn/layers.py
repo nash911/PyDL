@@ -137,7 +137,7 @@ class Layer(ABC):
     # Abstract Methods
     # ----------------
     @abstractmethod
-    def forward(self, inputs, inference=False, mask=None):
+    def forward(self, inputs, inference=False, mask=None, temperature=1.0):
         pass
 
     @abstractmethod
@@ -278,7 +278,7 @@ class FC(Layer):
             grad = np.sum(grad, axis=-1, keepdims=False)
         return grad
 
-    def forward(self, inputs, inference=False, mask=None):
+    def forward(self, inputs, inference=False, mask=None, temperature=1.0):
         if len(inputs.shape) > 2:  # Preceeding layer is a Convolution/Pooling layer or 3D inputs
             # Unroll inputs
             batch_size = inputs.shape[0]
@@ -294,7 +294,7 @@ class FC(Layer):
             z = self._batchnorm.forward(z)
 
         # Nonlinearity Activation
-        self._output = self._activation_fn.forward(z)
+        self._output = self._activation_fn.forward(z, temperature)
 
         # Dropout
         if self._dropout is not None:

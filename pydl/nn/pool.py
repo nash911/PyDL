@@ -12,18 +12,16 @@ import sys
 import warnings
 
 from pydl.nn.layers import Layer
-from pydl import conf
 
 
 class Pool(Layer):
-    """The Pooling Layer Class
-    """
+    """The Pooling Layer Class."""
 
     def __init__(self, inputs, receptive_field=None, padding='SAME', stride=None, pool='MAX',
                  name='Pooling_Layer'):
         super().__init__(name=name)
         self._type = 'Pooling_Layer'
-        self._inp_shape = inputs.shape[1:] # Input volume --> [depth, height, width]
+        self._inp_shape = inputs.shape[1:]  # Input volume --> [depth, height, width]
 
         if pool.upper() in ['MAX', 'AVG']:
             self._pool = pool.upper()
@@ -61,8 +59,8 @@ class Pool(Layer):
 
         # Reduce stride rows and cols to fit input shape, if larger
         if self._inp_shape[1] < stride_r or r_field_height < stride_r:
-            warnings.warn("\nWARNING! PoolLayer - Stride rows is larger than input " +
-                          "height and/or receptive field height. Adjusting stride rows accordingly.")
+            warnings.warn("\nWARNING! PoolLayer - Stride rows is larger than input height " +
+                          "and/or receptive field height. Adjusting stride rows accordingly.")
             stride_r = int(np.min([self._inp_shape[1], r_field_height]))
         if self._inp_shape[2] < stride_c or r_field_width < stride_c:
             warnings.warn("\nWARNING! PoolLayer - Stride cols is larger than input " +
@@ -72,12 +70,12 @@ class Pool(Layer):
 
         self._pooling_mask = None
 
-        # Check if the hyperparameter are valid for the given input volume, and set output volume shape
+        # Check if the hyperparameter are valid for the given input volume, and set output
+        # volume shape
         self.set_output_volume_shape(padding)
 
         # Calculate unroll indices of input volume
         self.calculate_unroll_indices()
-
 
     # Getters
     # -------
@@ -104,7 +102,6 @@ class Pool(Layer):
     def stride(self):
         return self._stride
 
-
     def set_output_volume_shape(self, padding):
         inp_d = self._inp_shape[0]
         inp_h = self._inp_shape[1]
@@ -116,19 +113,19 @@ class Pool(Layer):
         pad_w = ((inp_w - ker_w) % self._stride[1])
 
         if pad_h == 0 and pad_w == 0:
-            pad_h_tuple = tuple((0,0))
-            pad_w_tuple = tuple((0,0))
+            pad_h_tuple = tuple((0, 0))
+            pad_w_tuple = tuple((0, 0))
             self._padding = None
         else:
             if pad_h == 0:
-                pad_h_tuple = tuple((0,0))
+                pad_h_tuple = tuple((0, 0))
             else:
-                pad_h_tuple = tuple((int(np.floor(pad_h/2)), int(np.ceil(pad_h/2))))
+                pad_h_tuple = tuple((int(np.floor(pad_h / 2)), int(np.ceil(pad_h / 2))))
 
             if pad_w == 0:
-                pad_w_tuple = tuple((0,0))
+                pad_w_tuple = tuple((0, 0))
             else:
-                pad_w_tuple = tuple((int(np.floor(pad_w/2)), int(np.ceil(pad_w/2))))
+                pad_w_tuple = tuple((int(np.floor(pad_w / 2)), int(np.ceil(pad_w / 2))))
 
             self._padding = tuple((pad_h_tuple, pad_w_tuple))
 
@@ -140,7 +137,6 @@ class Pool(Layer):
         self._out_shape = tuple((None, inp_d, int(o_h), int(o_w)))
         self._out_size = np.prod(self._out_shape[1:])
 
-
     def calculate_unroll_indices(self):
         inp_d = self._inp_shape[0]
         inp_h = self._inp_shape[1]
@@ -148,10 +144,10 @@ class Pool(Layer):
         ker_h = self._receptive_field[0]
         ker_w = self._receptive_field[1]
 
-        window_row_inds = inp_h - (ker_h-1) + (0 if self._padding is None else
-                                               np.sum(self._padding[0]))
-        window_col_inds = inp_w - (ker_w-1) + (0 if self._padding is None else
-                                               np.sum(self._padding[1]))
+        window_row_inds = inp_h - (ker_h - 1) + (0 if self._padding is None else
+                                                 np.sum(self._padding[0]))
+        window_col_inds = inp_w - (ker_w - 1) + (0 if self._padding is None else
+                                                 np.sum(self._padding[1]))
 
         out_h = self._out_shape[2]
         out_w = self._out_shape[3]
@@ -162,14 +158,13 @@ class Pool(Layer):
         c0 = np.tile(np.arange(ker_w), ker_h)
         c1 = np.tile(np.arange(window_col_inds, step=self._stride[1]), out_h)
 
-        r = r1.reshape(-1,1) + r0.reshape(1,-1)
-        c = c1.reshape(-1,1) + c0.reshape(1,-1)
+        r = r1.reshape(-1, 1) + r0.reshape(1, -1)
+        c = c1.reshape(-1, 1) + c0.reshape(1, -1)
 
         self._row_inds = r
         self._col_inds = c
 
-
-    def input_gradients_max(self, inp_grad, summed=True): # Pool-grad Algo-3
+    def input_gradients_max(self, inp_grad, summed=True):  # Pool-grad Algo-3
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
         batch_size = inp_grad.shape[0]
         inp_dep = self._inp_shape[0]
@@ -196,15 +191,14 @@ class Pool(Layer):
             pad_c = self._padding[1]
 
             if np.sum(pad_r) > 0:
-                out_grads = out_grads[:,:,pad_r[0]:-pad_r[1],:]
+                out_grads = out_grads[:, :, pad_r[0]: -pad_r[1], :]
 
             if np.sum(pad_c) > 0:
-                out_grads = out_grads[:,:,:,pad_c[0]:-pad_c[1]]
+                out_grads = out_grads[:, :, :, pad_c[0]:-pad_c[1]]
 
         return out_grads
 
-
-    def input_gradients_avg(self, inp_grad, summed=True): # Pool-grad Algo-3
+    def input_gradients_avg(self, inp_grad, summed=True):  # Pool-grad Algo-3
         # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
         batch_size = inp_grad.shape[0]
         inp_dep = self._inp_shape[0]
@@ -212,8 +206,8 @@ class Pool(Layer):
 
         # row = np.expand_dims(np.expand_dims(self._row_inds, axis=0), axis=0)
         # col = np.expand_dims(np.expand_dims(self._col_inds, axis=0), axis=0)
-        row = self._row_inds[np.newaxis,np.newaxis,:,:]
-        col = self._col_inds[np.newaxis,np.newaxis,:,:]
+        row = self._row_inds[np.newaxis, np.newaxis, :, :]
+        col = self._col_inds[np.newaxis, np.newaxis, :, :]
         batch = np.arange(batch_size).reshape(-1, 1, 1, 1)
         dep = np.arange(inp_dep).reshape(1, -1, 1, 1)
 
@@ -226,7 +220,7 @@ class Pool(Layer):
         out_grads = np.zeros(out_grad_shape)
 
         grads = inp_grad.reshape(batch_size, inp_dep, -1, 1) * \
-                np.array([1.0/field_size] * int(field_size)).reshape(1, 1, 1, -1)
+            np.array([1.0 / field_size] * int(field_size)).reshape(1, 1, 1, -1)
 
         np.add.at(out_grads, [batch, dep, row, col], grads)
 
@@ -235,10 +229,10 @@ class Pool(Layer):
             pad_c = self._padding[1]
 
             if np.sum(pad_r) > 0:
-                out_grads = out_grads[:,:,pad_r[0]:-pad_r[1],:]
+                out_grads = out_grads[:, :, pad_r[0]:-pad_r[1], :]
 
             if np.sum(pad_c) > 0:
-                out_grads = out_grads[:,:,:,pad_c[0]:-pad_c[1]]
+                out_grads = out_grads[:, :, :, pad_c[0]:-pad_c[1]]
 
         return out_grads
 
@@ -253,12 +247,11 @@ class Pool(Layer):
         self._pooling_mask = np.argmax(unrolled_inputs, axis=-1).reshape(-1)
 
         # Max pooling output reshaped to output size
-        unroller_inp_reshaped = unrolled_inputs.reshape(-1, ker_h*ker_w)
+        unroller_inp_reshaped = unrolled_inputs.reshape(-1, ker_h * ker_w)
         pooling_out = unroller_inp_reshaped[np.arange(unroller_inp_reshaped.shape[0]),
                                             self._pooling_mask]
 
         return pooling_out.reshape(-1, *self.shape[1:])
-
 
     def forward_avg(self, padded_inputs):
         ker_h = self._receptive_field[0]
@@ -272,12 +265,11 @@ class Pool(Layer):
 
         return avg_pool_out
 
-
-    def forward(self, inputs, inference=None):
+    def forward(self, inputs, inference=None, mask=None, temperature=1.0):
         # Zero-pad input volume based on the setting
         if self._padding is not None:
             pad = self._padding
-            padded_inputs = np.pad(inputs, ((0,0),(0,0),*self._padding), 'constant',
+            padded_inputs = np.pad(inputs, ((0, 0), (0, 0), *self._padding), 'constant',
                                    constant_values=-np.inf if self._pool == 'MAX' else 0)
         else:
             padded_inputs = inputs
@@ -289,11 +281,10 @@ class Pool(Layer):
 
         return pool_out
 
-
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
-        if len(inp_grad.shape) > 2: # The proceeding layer is a Convolution/Pooling layer
+        if len(inp_grad.shape) > 2:  # The proceeding layer is a Convolution/Pooling layer
             pass
-        else: # The proceeding layer is a FC layer
+        else:  # The proceeding layer is a FC layer
             # Reshape incoming gradients accordingly
             inp_grad = inp_grad.reshape(-1, *self._out_shape[1:])
 
