@@ -501,8 +501,6 @@ class Training(ABC):
 
         train_size = int(data_size * self._train_size)
         test_size = data_size - train_size
-        print("data_size: %d  --  train_size: %f  --  train_size: %f" % (data_size, train_size,
-                                                                         test_size))
 
         self._train_X = np.zeros((train_size, K), dtype=conf.dtype)
         for i, d in enumerate(X[:train_size]):
@@ -524,19 +522,18 @@ class Training(ABC):
             sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
 
         sampled_text = [sampled_char]
-        rnn_out = None
         for n in range(sample_length):
+            input = np.zeros((1, self._nn.num_classes), dtype=conf.dtype)
+            input[0, self._char_to_idx[sampled_char]] = 1
             for layer in self._nn.layers:
                 if layer.type in ['RNN_Layer']:
                     if n == 0:
                         # Reset hidden state at the beginning of sequence generation
                         layer.reset_hidden_state()
-                    input = np.zeros((1, self._nn.num_classes), dtype=conf.dtype)
-                    input[0, self._char_to_idx[sampled_char]] = 1
-                    rnn_out = np.copy(layer.forward(input, inference=True)[1])
-                    layer.reset_hidden_state(rnn_out)
+                    input = np.copy(layer.forward(input, inference=True)[1])
+                    layer.reset_hidden_state(input)
                 else:
-                    probs = layer.forward(rnn_out, inference=True, temperature=temperature)
+                    probs = layer.forward(input, inference=True, temperature=temperature)
                     sampled_idx = np.random.choice(range(self._nn.num_classes),
                                                    p=probs.reshape(-1))
                     sampled_char = self._idx_to_char[sampled_idx]

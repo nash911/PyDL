@@ -127,7 +127,7 @@ class Layer(ABC):
         warnings.warn("\nWARNING! Setting dropout_mask for a layer. Preset dropout mask should " +
                       "only be used for gradient checking in test mode. If training, undo this!")
         if d_mask is not None:
-            if self.type == 'FC_Layer':
+            if self.type in ['FC_Layer', 'RNN_Layer']:
                 assert(d_mask.shape[-1] == self.num_neurons)
             elif self.type == 'Convolution_Layer':
                 assert(d_mask.shape[1:] == self.shape[1:])

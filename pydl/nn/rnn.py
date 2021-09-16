@@ -58,7 +58,6 @@ class RNN(Layer):
             if num_neurons is not None:
                 assert(weights['hidden'].shape == (num_neurons, num_neurons) and
                        weights['inp'].shape[1] == num_neurons)
-                self._num_neurons = num_neurons
             else:
                 assert(weights['hidden'].shape[0] == weights['hidden'].shape[1] and
                        weights['inp'].shape[1] == weights['hidden'].shape[0])
@@ -88,7 +87,8 @@ class RNN(Layer):
         self.reset_gradients()
 
         if dropout is not None and dropout < 1.0:
-            self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn[0].type)
+            self._dropout = [Dropout(p=dropout, activation_fn=self._activation_fn[0].type) for _ in
+                             range(self._seq_len + 1)]
 
     # Getters
     # -------
@@ -173,6 +173,7 @@ class RNN(Layer):
         self._weights_grad['hidden'] = np.zeros_like(self._weights['hidden'])
         self._weights_grad['inp'] = np.zeros_like(self._weights['inp'])
         self._bias_grad = np.zeros_like(self._bias)
+        self._out_grad = OrderedDict()
 
     def score_fn(self, inputs, weights=None):
         if weights is None:
@@ -243,6 +244,22 @@ class RNN(Layer):
             # Nonlinearity Activation
             self._output[t] = self._activation_fn[t].forward(z)
 
+            # Dropout
+            if self._dropout is not None:
+                if not inference:  # Training step
+                    if self.dropout_mask is None:
+                        drop_mask = None if mask is None else mask[t - 1]
+                    else:
+                        drop_mask = self.dropout_mask[t - 1]
+
+                    # Apply Dropout Mask
+                    self._output[t] = self._dropout[t].forward(self._output[t], drop_mask)
+                else:  # Inference
+                    if self._activation_fn[t].type in ['Sigmoid', 'Tanh', 'SoftMax']:
+                        self._output[t] *= self.dropout[t].p
+                    else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
+                        pass  # Do nothing - Inverse Dropout
+
         return self._output
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
@@ -251,8 +268,14 @@ class RNN(Layer):
             # Add gradients from the next (t+1) hidden sequence and from the layer above (l+1)
             grad = hidden_grad + inp_grad[t]
 
+            # Backpropagating through Dropout
+            if self._dropout is not None:
+                drop_grad = self._dropout[t].backward(grad)
+            else:
+                drop_grad = grad
+
             # dy/dz: Gradient of the layer output w.r.t the logits 'z'
-            activation_grad = self._activation_fn[t].backward(grad)
+            activation_grad = self._activation_fn[t].backward(drop_grad)
 
             # dy/dw: Gradient of the layer output w.r.t the weights 'wh' and 'wx'
             self._weights_grad['hidden'] += \

@@ -1025,8 +1025,13 @@ class TestNN(unittest.TestCase):
 
             # RNN Architecture
             # ----------------
-            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh')
-            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax')
+            dp1 = np.random.rand()
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
+                     name='RNN-1')
+            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
             layers = [l1, l2]
             test(X, layers)
@@ -1049,14 +1054,19 @@ class TestNN(unittest.TestCase):
 
             # RNN Architecture
             # ----------------
-            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh')
-            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax')
+            dp1 = np.random.rand()
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
+                     name='RNN-1')
+            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
             layers = [l1, l2]
             test(X, layers)
 
-            # Case-3 - Sandwitched Layers
-            # ---------------------------
+            # Case-3 - Sandwitched Layers - FC - RNN - FC
+            # -------------------------------------------
             # Layer 1
             batch_size = seq_len = 99
             inp_feat_size = 25
@@ -1066,7 +1076,6 @@ class TestNN(unittest.TestCase):
             b_1 = np.random.uniform(-1, 1, (1, num_neurons_fc)) * 0.01
 
             # Layer 2
-            seq_len = 100
             num_neurons_rnn = 15
             w_2h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_2x = np.random.randn(w_1.shape[-1], num_neurons_rnn) * 0.01
@@ -1079,9 +1088,60 @@ class TestNN(unittest.TestCase):
 
             # RNN Architecture
             # ----------------
-            l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU')
-            l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh')
-            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax')
+            dp1 = np.random.rand()
+            l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU', dropout=dp1, name='FC-1')
+            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_fc) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            dp2 = np.random.rand()
+            l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh', dropout=dp2,
+                     name='RNN-2')
+            mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
+
+            # Case-4 - Sandwitched Layers - RNN - RNN - FC
+            # --------------------------------------------
+            # Layer 1
+            batch_size = seq_len = 90
+            inp_feat_size = 17
+            num_neurons_rnn_1 = 11
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
+            w_1h = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_1) * 0.01
+            w_1x = np.random.randn(inp_feat_size, num_neurons_rnn_1) * 0.01
+            w_1 = {'hidden': w_1h, 'inp': w_1x}
+            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn_1)) * 0.01
+
+            # Layer 2
+            num_neurons_rnn_2 = 31
+            w_2h = np.random.randn(num_neurons_rnn_2, num_neurons_rnn_2) * 0.01
+            w_2x = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_2) * 0.01
+            w_2 = {'hidden': w_2h, 'inp': w_2x}
+            b_2 = np.random.uniform(-1, 1, (1, num_neurons_rnn_2)) * 0.01
+
+            # Layer 3
+            w_3 = np.random.randn(b_2.shape[-1], 24) * 0.01
+            b_3 = np.random.uniform(-1, 1, (1, 24)) * 0.01
+
+            # RNN Architecture
+            # ----------------
+            dp1 = np.random.rand()
+            l1 = RNN(X, num_neurons_rnn_1, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
+                     name='RNN-1')
+            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            dp2 = np.random.rand()
+            l2 = RNN(l1, num_neurons_rnn_2, w_2, b_2, seq_len, activation_fn='Tanh', dropout=dp2,
+                     name='RNN-2')
+            mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 
             layers = [l1, l2, l3]
             test(X, layers)

@@ -72,7 +72,7 @@ class TestRNN(unittest.TestCase):
         num_neurons = [1, 2, 3, 5, 6, 11]
         one_hot = [True, False]
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
-        dropout = [False]
+        dropout = [True, False]
 
         for seq_len, feat, neur, oh, scl, dout in list(itertools.product(
                 sequence_length, feature_size, num_neurons, one_hot, scale, dropout)):
@@ -92,51 +92,91 @@ class TestRNN(unittest.TestCase):
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_linear = OrderedDict()
             true_out_linear[0] = h
+            p = None
+            mask = None
             for i, x in enumerate(X):
                 h = np.matmul(h, wh) + np.matmul(x.reshape(1, -1), wx) + bias
+                if dout:
+                    if p is None:
+                        p = np.random.rand()
+                        mask = list()
+                    mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
+                    h *= mask[-1]
                 true_out_linear[i + 1] = h
-            test(X, w, seq_len, true_out_linear, bias, actv_fn='Linear')
+            test(X, w, seq_len, true_out_linear, bias, actv_fn='Linear', p=p, mask=mask)
 
             # Sigmoid
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_sigmoid = OrderedDict()
             true_out_sigmoid[0] = h
+            p = None
+            mask = None
             for i, x in enumerate(X):
                 score = np.matmul(h, wh) + np.matmul(x.reshape(1, -1), wx) + bias
                 h = 1.0 / (1.0 + np.exp(-score))
+                if dout:
+                    if p is None:
+                        p = np.random.rand()
+                        mask = list()
+                    mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
+                    h *= mask[-1]
                 true_out_sigmoid[i + 1] = h
-            test(X, w, seq_len, true_out_sigmoid, bias, actv_fn='Sigmoid')
+            test(X, w, seq_len, true_out_sigmoid, bias, actv_fn='Sigmoid', p=p, mask=mask)
 
             # Tanh
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_tanh = OrderedDict()
             true_out_tanh[0] = h
+            p = None
+            mask = None
             for i, x in enumerate(X):
                 score = np.matmul(h, wh) + np.matmul(x.reshape(1, -1), wx) + bias
                 h = (2.0 / (1.0 + np.exp(-2.0 * score))) - 1.0
+                if dout:
+                    if p is None:
+                        p = np.random.rand()
+                        mask = list()
+                    mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
+                    h *= mask[-1]
                 true_out_tanh[i + 1] = h
-            test(X, w, seq_len, true_out_tanh, bias, actv_fn='Tanh')
+            test(X, w, seq_len, true_out_tanh, bias, actv_fn='Tanh', p=p, mask=mask)
 
             # ReLU
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_relu = OrderedDict()
             true_out_relu[0] = h
+            p = None
+            mask = None
             for i, x in enumerate(X):
                 score = np.matmul(h, wh) + np.matmul(x.reshape(1, -1), wx) + bias
                 h = np.maximum(0, score)
+                if dout:
+                    if p is None:
+                        p = np.random.rand()
+                        mask = list()
+                    mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
+                    h *= mask[-1]
                 true_out_relu[i + 1] = h
-            test(X, w, seq_len, true_out_relu, bias, actv_fn='ReLU')
+            test(X, w, seq_len, true_out_relu, bias, actv_fn='ReLU', p=p, mask=mask)
 
             # SoftMax
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_softmax = OrderedDict()
             true_out_softmax[0] = h
+            p = None
+            mask = None
             for i, x in enumerate(X):
                 score = np.matmul(h, wh) + np.matmul(x.reshape(1, -1), wx) + bias
                 unnorm_prob = np.exp(score)
                 h = unnorm_prob / np.sum(unnorm_prob, axis=-1, keepdims=True)
+                if dout:
+                    if p is None:
+                        p = np.random.rand()
+                        mask = list()
+                    mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
+                    h *= mask[-1]
                 true_out_softmax[i + 1] = h
-            test(X, w, seq_len, true_out_softmax, bias, actv_fn='Softmax')
+            test(X, w, seq_len, true_out_softmax, bias, actv_fn='Softmax', p=p, mask=mask)
 
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-6
@@ -261,15 +301,14 @@ class TestRNN(unittest.TestCase):
         scale = [1e-2]
         unit_inp_grad = [True, False]
         activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'ReLU', 'Softmax']
-        dropout = [False]
+        dropout = [True, False]
         repeat = list(range(1))
 
         for seq_len, feat, neur, oh, scl, unit, actv, dout, r in \
             list(itertools.product(sequence_length, feature_size, num_neurons, one_hot, scale,
                                    unit_inp_grad, activation_fn, dropout, repeat)):
-            if dout and actv == 'Softmax':
-                continue
 
+            # Initialize inputs
             if oh:
                 X = np.zeros((seq_len, feat), dtype=conf.dtype)
                 rnd_idx = np.random.randint(feat, size=seq_len)
@@ -277,27 +316,27 @@ class TestRNN(unittest.TestCase):
             else:
                 X = np.random.uniform(-scl, scl, (seq_len, feat))
 
+            # Initialize weights and bias
             wh = np.random.rand(neur, neur) * scl
             wx = np.random.rand(feat, neur) * scl
             w = {'hidden': wh, 'inp': wx}
             bias = np.random.rand(neur) * scl
 
+            # Initialize input gradients
             inp_grad = OrderedDict()
             for s in range(1, seq_len + 1):
                 inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                     np.random.uniform(-1, 1, (1, neur))
 
-            # if dout:
-            #     p = np.random.rand()
-            #     mask = np.array(np.random.rand(batch, neur) < p, dtype=conf.dtype)
-            #     if actv in ['Linear', 'ReLU']:
-            #          mask /=  p
-            # else:
-            #     p = None
-            #     mask = None
-
-            p = None
-            mask = None
+            # Set dropout mask
+            if dout:
+                p = np.random.rand()
+                mask = np.array(np.random.rand(seq_len, neur) < p, dtype=conf.dtype)
+                if actv in ['Linear', 'ReLU']:
+                    mask /= p
+            else:
+                p = None
+                mask = None
 
             test(X, w, seq_len, inp_grad, bias, actv, p, mask)
 
