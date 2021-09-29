@@ -386,6 +386,34 @@ class Training(ABC):
             accuracy = (1.0 - np.mean(pred_diff)) * 100.0
         return accuracy
 
+    def fit_test_data(self, X, fig, axs, batch_size=None, inference=True):
+        if batch_size is None:
+            batch_size = X.shape[0]
+        num_batches = int(np.ceil(X.shape[0] / batch_size))
+
+        # # Reset hidden state of RNN layers, if any
+        # self.reset_rnn_layers()
+
+        test_pred = list()
+        for i in range(num_batches):
+            start = int(batch_size * i)
+            if i == num_batches - 1:
+                end = X.shape[0]
+            else:
+                end = start + batch_size
+            test_pred.append(self._nn.forward(X[start:end], inference))
+            self.reset_rnn_layers(hidden_state='previous_state')
+        test_pred = np.concatenate(test_pred, axis=0)
+
+        colors = ['red', 'blue', 'green', 'purple', 'orange']
+        axs.clear()
+        for c in range(X.shape[-1]):
+            axs.plot(X[1:, c], linestyle='-', color=colors[c])
+            axs.plot(test_pred[:-1, c], '.', color=colors[c])
+
+        plt.show(block=False)
+        plt.pause(0.01)
+
     def reset_rnn_layers(self, hidden_state=None):
         for layer in self._nn.layers:
             if layer.type in ['RNN_Layer']:
@@ -490,7 +518,7 @@ class Training(ABC):
         print("Training Data:\n", self._train_X.shape)
         print("Test Data:\n", self._test_X.shape)
 
-    def prepare_character_data(self, X, y=None):
+    def prepare_character_data(self, X):
         # Encode data to OneHot
         data_size = len(X)
         unique_chars = list(set(X))
@@ -516,21 +544,40 @@ class Training(ABC):
         print("Training Data:\n", self._train_X.shape)
         print("Test Data:\n", self._test_X.shape)
 
-    def sample(self, sample_length=100, temperature=1.0):
+    def prepare_regression_data(self, X, y=None):
+        data_size = X.shape[0]
+        train_size = int(data_size * self._train_size)
+
+        self._train_X = X[:train_size]
+        self._test_X = X[train_size:]
+
+        if y is not None:
+            self._train_y = y[:train_size]
+            self._test_y = y[train_size:]
+
+        print("Training Data:\n", self._train_X.shape)
+        print("Test Data:\n", self._test_X.shape)
+
+    def generate_character_sequence(self, sample_length=100, temperature=1.0):
         sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
         while not (sampled_char.isalpha() and sampled_char.isupper()):
             sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
 
         sampled_text = [sampled_char]
         for n in range(sample_length):
+            # Set the previous sampled character (O_t-1) as current input (I_t) to the network,
+            # encodes as a OneHot vector
             input = np.zeros((1, self._nn.num_classes), dtype=conf.dtype)
             input[0, self._char_to_idx[sampled_char]] = 1
+
+            # Forward propagate throug the network
             for layer in self._nn.layers:
                 if layer.type in ['RNN_Layer']:
                     if n == 0:
                         # Reset hidden state at the beginning of sequence generation
                         layer.reset_hidden_state()
                     input = np.copy(layer.forward(input, inference=True)[1])
+                    # Set previous hidden state (h_t-1) to current hidden state output (h_t)
                     layer.reset_hidden_state(input)
                 else:
                     probs = layer.forward(input, inference=True, temperature=temperature)
@@ -540,6 +587,36 @@ class Training(ABC):
                     sampled_text.append(sampled_char)
 
         return sampled_text
+
+    def generate_cont_time_series_data(self, fig, axs, sample_length=500):
+        input = self._train_X[-1].reshape(1, -1)
+
+        sampled_data = [input]
+        for n in range(sample_length):
+            for layer in self._nn.layers:
+                if layer.type in ['RNN_Layer']:
+                    input = np.copy(layer.forward(input, inference=True)[1])
+                    # Set previous hidden state (h_t-1) to current hidden state output (h_t)
+                    layer.reset_hidden_state(input)
+                else:
+                    input = layer.forward(input, inference=True)
+                    sampled_data.append(input)
+
+        sampled_data = np.concatenate(sampled_data, axis=0)
+        data = np.vstack((self._train_X, sampled_data))
+        train_size = self._train_X.shape[0]
+
+        colors = ['red', 'blue', 'green', 'purple', 'orange']
+        axs.clear()
+        for c in range(data.shape[-1]):
+            axs.plot(list(range(train_size)), data[:train_size, c], linestyle='-', color=colors[c])
+            axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
+                     color=colors[c])
+
+        plt.show(block=False)
+        plt.pause(0.01)
+
+        return
 
     def train(self, batch_size=256, epochs=1000, plot=None, log_freq=100):
         start_time = time.time()
@@ -595,7 +672,7 @@ class Training(ABC):
         return training_logs_dict
 
     def train_rnn(self, batch_size=256, epochs=1000, sample_length=100, temperature=1.0, plot=None,
-                  log_freq=100):
+                  fit_test_data=False, log_freq=100):
         start_time = time.time()
 
         if plot is not None:
@@ -603,6 +680,10 @@ class Training(ABC):
             fig.suptitle(plot, fontsize=20)
         else:
             fig = axs = None
+
+        if fit_test_data:
+            fig_2, axs_2 = plt.subplots(1, sharey=False, sharex=False)
+            fig_3, axs_3 = plt.subplots(1, sharey=False, sharex=False)
 
         epochs_list = list()
         train_loss = list()
@@ -637,13 +718,22 @@ class Training(ABC):
                 self.update_network(e + 1)
 
             if e % 5 == 0:
-                # Sample from the model by setting an initial seed
-                sampled_text = self.sample(sample_length, temperature)
-                print('\n', ''.join(sampled_text), '\n')
+                if self._regression:
+                    if fit_test_data:
+                        # Generate continuous time series data starting from the last training
+                        # data point
+                        sampled_text = \
+                            self.generate_cont_time_series_data(fig_2, axs_2, sample_length)
+                else:
+                    # Sample from the model by setting an initial seed
+                    sampled_text = self.generate_character_sequence(sample_length, temperature)
+                    print('\n', ''.join(sampled_text), '\n')
 
             if (e + 1) % np.abs(log_freq) == 0:
                 self.print_log_rnn((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
                                    train_loss, test_loss, train_accuracy, test_accuracy, log_freq)
+                if self._regression and fit_test_data:
+                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, inference=True)
 
             # End of an epoch - Reset RNN layers
             self.reset_rnn_layers()
@@ -675,12 +765,15 @@ class SGD(Training):
         return training_logs_dict
 
     def train_rnn(self, X, y=None, batch_size=256, epochs=1000, sample_length=100, temperature=1.0,
-                  plot=None, log_freq=100):
-        self.prepare_character_data(X=X, y=y)
+                  plot=None, fit_test_data=False, log_freq=100):
+        if self._regression:
+            self.prepare_regression_data(X)
+        else:
+            self.prepare_character_data(X)
 
         training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
                                                sample_length=sample_length, temperature=temperature,
-                                               log_freq=log_freq)
+                                               fit_test_data=fit_test_data, log_freq=log_freq)
         return training_logs_dict
 
     def update_network(self, t=None):
@@ -721,14 +814,18 @@ class Momentum(Training):
                                            log_freq=log_freq)
         return training_logs_dict
 
-    def train_rnn(self, X, y, batch_size=256, epochs=10000, sample_length=100, temperature=1.0,
-                  plot=None, log_freq=100):
-        self.prepare_character_data(X=X, y=y)
+    def train_rnn(self, X, y=None, batch_size=256, epochs=10000, sample_length=100, temperature=1.0,
+                  plot=None, fit_test_data=False, log_freq=100):
+        if self._regression:
+            self.prepare_regression_data(X)
+        else:
+            self.prepare_character_data(X)
+
         self.init_momentum_velocity()
 
         training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
                                                sample_length=sample_length, temperature=temperature,
-                                               log_freq=log_freq)
+                                               fit_test_data=fit_test_data, log_freq=log_freq)
         return training_logs_dict
 
     def update_network(self, t=None):
@@ -771,14 +868,18 @@ class RMSprop(Training):
                                            log_freq=log_freq)
         return training_logs_dict
 
-    def train_rnn(self, X, y, batch_size=256, epochs=10000, sample_length=100, temperature=1.0,
-                  plot=None, log_freq=100):
-        self.prepare_character_data(X=X, y=y)
+    def train_rnn(self, X, y=None, batch_size=256, epochs=10000, sample_length=100, temperature=1.0,
+                  plot=None, fit_test_data=False, log_freq=100):
+        if self._regression:
+            self.prepare_regression_data(X)
+        else:
+            self.prepare_character_data(X)
+
         self.init_rmsprop_cache()
 
         training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
                                                sample_length=sample_length, temperature=temperature,
-                                               log_freq=log_freq)
+                                               fit_test_data=fit_test_data, log_freq=log_freq)
         return training_logs_dict
 
     def update_network(self, t=None):
@@ -829,13 +930,17 @@ class Adam(Training):
         return training_logs_dict
 
     def train_rnn(self, X, y=None, batch_size=256, epochs=10000, sample_length=100, temperature=1.0,
-                  plot=None, log_freq=100):
-        self.prepare_character_data(X=X, y=y)
+                  plot=None, fit_test_data=False, log_freq=100):
+        if self._regression:
+            self.prepare_regression_data(X)
+        else:
+            self.prepare_character_data(X)
+
         self.init_adam_moment()
 
         training_logs_dict = super().train_rnn(batch_size=batch_size, epochs=epochs, plot=plot,
                                                sample_length=sample_length, temperature=temperature,
-                                               log_freq=log_freq)
+                                               fit_test_data=fit_test_data, log_freq=log_freq)
         return training_logs_dict
 
     def update_network(self, t):
