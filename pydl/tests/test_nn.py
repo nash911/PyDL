@@ -18,6 +18,7 @@ from pydl.nn.conv import Conv
 from pydl.nn.pool import Pool
 from pydl.nn.residual_block import ResidualBlock
 from pydl.nn.rnn import RNN
+from pydl.nn.lstm import LSTM
 from pydl.nn.nn import NN
 from pydl import conf
 
@@ -33,31 +34,31 @@ class TestNN(unittest.TestCase):
         # Layer 1 - Sigmoid
         X = np.random.uniform(-1, 1, (10, 25))
         w_1 = np.random.randn(X.shape[-1], 19)
-        b_1 = np.random.uniform(-1, 1, (1, 19))
+        b_1 = np.random.uniform(-1, 1, (19))
         l1_score = np.matmul(X, w_1) + b_1
         l1_out = 1.0 / (1.0 + np.exp(-(l1_score)))
 
         # Layer 2
         w_2 = np.random.randn(l1_out.shape[-1], 15)
-        b_2 = np.random.uniform(-1, 1, (1, 15))
+        b_2 = np.random.uniform(-1, 1, (15))
         l2_score = np.matmul(l1_out, w_2) + b_2
         l2_out = np.maximum(0, l2_score)
 
         # Layer 3
         w_3 = np.random.randn(l2_out.shape[-1], 11)
-        b_3 = np.random.uniform(-1, 1, (1, 11))
+        b_3 = np.random.uniform(-1, 1, (11))
         l3_score = np.matmul(l2_out, w_3) + b_3
         l3_out = (2.0 / (1.0 + np.exp(-2.0 * (l3_score)))) - 1.0
 
         # Layer 4
         w_4 = np.random.randn(l3_out.shape[-1], 9)
-        b_4 = np.random.uniform(-1, 1, (1, 9))
+        b_4 = np.random.uniform(-1, 1, (9))
         l4_score = np.matmul(l3_out, w_4) + b_4
         l4_out = np.maximum(0, l4_score)
 
         # Layer 4
         w_5 = np.random.randn(l4_out.shape[-1], 9)
-        b_5 = np.random.uniform(-1, 1, (1, 9))
+        b_5 = np.random.uniform(-1, 1, (9))
         l5_score = np.matmul(l4_out, w_5) + b_5
         l5_out = np.exp(l5_score) / np.sum(np.exp(l5_score), axis=-1, keepdims=True)
 
@@ -164,31 +165,31 @@ class TestNN(unittest.TestCase):
             batch_size = 10
             X = np.random.uniform(-1, 1, (batch_size, 25))
             w_1 = np.random.randn(X.shape[-1], 30)
-            b_1 = np.random.uniform(-1, 1, (1, 30))
+            b_1 = np.random.uniform(-1, 1, (30))
 
             # Layer 2
             w_2 = np.random.randn(w_1.shape[-1], 23)
-            b_2 = np.random.uniform(-1, 1, (1, 23))
+            b_2 = np.random.uniform(-1, 1, (23))
 
             # Layer 3
             w_3 = np.random.randn(w_2.shape[-1], 16)
-            b_3 = np.random.uniform(-1, 1, (1, 16))
+            b_3 = np.random.uniform(-1, 1, (16))
 
             # Layer 4
             w_4 = np.random.randn(w_3.shape[-1], 19)
-            b_4 = np.random.uniform(-1, 1, (1, 19))
+            b_4 = np.random.uniform(-1, 1, (19))
 
             # Layer 5
             w_5 = np.random.randn(w_4.shape[-1], 11)
-            b_5 = np.random.uniform(-1, 1, (1, 11))
+            b_5 = np.random.uniform(-1, 1, (11))
 
             # Layer 6
             w_6 = np.random.randn(w_5.shape[-1], 9)
-            b_6 = np.random.uniform(-1, 1, (1, 9))
+            b_6 = np.random.uniform(-1, 1, (9))
 
             # Layer 7
             w_7 = np.random.randn(w_6.shape[-1], 7)
-            b_7 = np.random.uniform(-1, 1, (1, 7))
+            b_7 = np.random.uniform(-1, 1, (7))
 
             # Case-1
             # ------
@@ -260,9 +261,10 @@ class TestNN(unittest.TestCase):
 
     def fc_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
         w = layer.weights
-        # b = layer.bias
+        b = layer.bias
+
         weights_grad = layer.weights_grad
-        # bias_grad = layer.bias_grad
+        bias_grad = layer.bias_grad
 
         # Weights finite difference gradients
         weights_finite_diff = np.empty(weights_grad.shape)
@@ -299,23 +301,23 @@ class TestNN(unittest.TestCase):
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
         layer.weights = w
 
-        # # Bias finite difference gradients
-        # bias_finite_diff = np.empty(bias_grad.shape)
-        # for i in range(b.shape[0]):
-        #     b_delta = np.zeros(b.shape, dtype=conf.dtype)
-        #     b_delta[i] = delta
-        #     layer.bias = b + b_delta
-        #     lhs = nn.forward(inp)
-        #     layer.bias = b - b_delta
-        #     rhs = nn.forward(inp)
-        #     bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
-        #
-        # try:
-        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
-        # except AssertionError:
-        #     print("AssertionError Bias: ", layer.name)
-        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
-        # layer.bias = b
+        # Bias finite difference gradients
+        bias_finite_diff = np.empty(bias_grad.shape)
+        for i in range(b.shape[0]):
+            b_delta = np.zeros(b.shape, dtype=conf.dtype)
+            b_delta[i] = delta
+            layer.bias = b + b_delta
+            lhs = nn.forward(inp)
+            layer.bias = b - b_delta
+            rhs = nn.forward(inp)
+            bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+
+        try:
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        except AssertionError:
+            print("AssertionError Bias: ", layer.name)
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        layer.bias = b
 
         if layer.has_batchnorm:
             bn = layer.batchnorm
@@ -360,7 +362,10 @@ class TestNN(unittest.TestCase):
 
     def conv_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
         w = layer.weights
+        b = layer.bias
+
         weights_grad = layer.weights_grad
+        bias_grad = layer.bias_grad
 
         # Weights finite difference gradients
         weights_finite_diff = np.empty(weights_grad.shape)
@@ -372,10 +377,8 @@ class TestNN(unittest.TestCase):
                         w_delta[i, j, k, m] = delta
                         layer.weights = w + w_delta
                         lhs = nn.forward(inp)
-                        # layer_out_lhs = layer.output
                         layer.weights = w - w_delta
                         rhs = nn.forward(inp)
-                        # layer_out_rhs = layer.output
                         weights_finite_diff[i, j, k, m] = \
                             np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
 
@@ -393,6 +396,24 @@ class TestNN(unittest.TestCase):
             print("AssertionError Weights: ", layer.name)
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=3)
         layer.weights = w
+
+        # Bias finite difference gradients
+        bias_finite_diff = np.empty(bias_grad.shape)
+        for i in range(b.shape[0]):
+            b_delta = np.zeros(b.shape, dtype=conf.dtype)
+            b_delta[i] = delta
+            layer.bias = b + b_delta
+            lhs = nn.forward(inp)
+            layer.bias = b - b_delta
+            rhs = nn.forward(inp)
+            bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+
+        try:
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        except AssertionError:
+            print("AssertionError Bias: ", layer.name)
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=3)
+        layer.bias = b
 
         if layer.has_batchnorm:
             bn = layer.batchnorm
@@ -445,9 +466,11 @@ class TestNN(unittest.TestCase):
 
         wh = layer.hidden_weights
         wx = layer.input_weights
+        bias = layer.bias
 
         hidden_weights_grad = layer.hidden_weights_grad
         input_weights_grad = layer.input_weights_grad
+        bias_grad = layer.bias_grad
 
         # Hidden weights finite difference gradients
         hidden_weights_finite_diff = np.empty(hidden_weights_grad.shape)
@@ -485,22 +508,66 @@ class TestNN(unittest.TestCase):
             npt.assert_almost_equal(input_weights_grad, input_weights_finite_diff, decimal=tol)
         layer.input_weights = wx
 
-        # # Bias finite difference gradients
-        # bias_finite_diff = np.empty(bias_grad.shape)
-        # for i in range(bias_grad.shape[0]):
-        #     bias_delta = np.zeros_like(bias)
-        #     bias_delta[i] = delta
-        #     layer.bias = bias + bias_delta
-        #     lhs = nn.forward(inp)
-        #     layer.bias = bias - bias_delta
-        #     rhs = nn.forward(inp)
-        #     bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
-        # try:
-        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
-        # except AssertionError:
-        #     print("AssertionError Bias: ", layer.name)
-        #     npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
-        # layer.bias = bias
+        # Bias finite difference gradients
+        bias_finite_diff = np.empty(bias_grad.shape)
+        for i in range(bias_grad.shape[0]):
+            bias_delta = np.zeros_like(bias)
+            bias_delta[i] = delta
+            layer.bias = bias + bias_delta
+            lhs = nn.forward(inp)
+            layer.bias = bias - bias_delta
+            rhs = nn.forward(inp)
+            bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Bias: ", layer.name)
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        layer.bias = bias
+
+    def lstm_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
+        tol = 7
+
+        w = layer.weights
+        bias = layer.bias
+
+        weights_grad = layer.weights_grad
+        bias_grad = layer.bias_grad
+
+        # Weights finite difference gradients
+        weights_finite_diff = np.empty(weights_grad.shape)
+        for i in range(weights_grad.shape[0]):
+            for j in range(weights_grad.shape[1]):
+                w_delta = np.zeros_like(w)
+                w_delta[i, j] = delta
+                layer.weights = w + w_delta
+                lhs = nn.forward(inp)
+                layer.weights = w - w_delta
+                rhs = nn.forward(inp)
+                weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Weights: ", layer.name)
+            npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=tol)
+        layer.weights = w
+
+        # Bias finite difference gradients
+        bias_finite_diff = np.empty(bias_grad.shape)
+        for i in range(bias_grad.shape[0]):
+            bias_delta = np.zeros_like(bias)
+            bias_delta[i] = delta
+            layer.bias = bias + bias_delta
+            lhs = nn.forward(inp)
+            layer.bias = bias - bias_delta
+            rhs = nn.forward(inp)
+            bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Bias: ", layer.name)
+            npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+        layer.bias = bias
 
     def inputs_1D_grad_test(self, nn, inp, inp_grad, inputs_grad, delta):
         if type(inputs_grad) is OrderedDict:
@@ -559,31 +626,31 @@ class TestNN(unittest.TestCase):
             batch_size = 10
             X = np.random.uniform(-1, 1, (batch_size, 25))
             w_1 = np.random.randn(X.shape[-1], 30)
-            b_1 = np.random.uniform(-1, 1, (1, 30))
+            b_1 = np.random.uniform(-1, 1, (30))
 
             # Layer 2
             w_2 = np.random.randn(w_1.shape[-1], 23)
-            b_2 = np.random.uniform(-1, 1, (1, 23))
+            b_2 = np.random.uniform(-1, 1, (23))
 
             # Layer 3
             w_3 = np.random.randn(w_2.shape[-1], 16)
-            b_3 = np.random.uniform(-1, 1, (1, 16))
+            b_3 = np.random.uniform(-1, 1, (16))
 
             # Layer 4
             w_4 = np.random.randn(w_3.shape[-1], 19)
-            b_4 = np.random.uniform(-1, 1, (1, 19))
+            b_4 = np.random.uniform(-1, 1, (19))
 
             # Layer 5
             w_5 = np.random.randn(w_4.shape[-1], 11)
-            b_5 = np.random.uniform(-1, 1, (1, 11))
+            b_5 = np.random.uniform(-1, 1, (11))
 
             # Layer 6
             w_6 = np.random.randn(w_5.shape[-1], 9)
-            b_6 = np.random.uniform(-1, 1, (1, 9))
+            b_6 = np.random.uniform(-1, 1, (9))
 
             # Layer 7
             w_7 = np.random.randn(w_6.shape[-1], 7)
-            b_7 = np.random.uniform(-1, 1, (1, 7))
+            b_7 = np.random.uniform(-1, 1, (7))
 
             # Case-1
             # ------
@@ -700,7 +767,7 @@ class TestNN(unittest.TestCase):
             pad_1 = 0
             stride_1 = 3
             w_1 = np.random.randn(num_kernals_1, depth, rec_h_1, rec_w_1)
-            b_1 = np.random.uniform(-1, 1, (1, num_kernals_1))
+            b_1 = np.random.uniform(-1, 1, (num_kernals_1))
             dp1 = np.random.rand()
 
             l1 = Conv(X, weights=w_1, bias=b_1, zero_padding=pad_1, stride=stride_1,
@@ -715,7 +782,7 @@ class TestNN(unittest.TestCase):
             pad_2 = (0, 0)
             stride_2 = 1
             w_2 = np.random.randn(num_kernals_2, num_kernals_1, rec_h_2, rec_w_2)
-            b_2 = np.random.uniform(-1, 1, (1, num_kernals_2))
+            b_2 = np.random.uniform(-1, 1, (num_kernals_2))
             dp2 = np.random.rand()
 
             l2 = Conv(l1, weights=w_2, bias=b_2, zero_padding=pad_2, stride=stride_2,
@@ -737,7 +804,7 @@ class TestNN(unittest.TestCase):
             pad_4 = (1, 2)
             stride_4 = 1
             w_4 = np.random.randn(num_kernals_4, num_kernals_2, rec_h_4, rec_w_4)
-            b_4 = np.random.uniform(-1, 1, (1, num_kernals_4))
+            b_4 = np.random.uniform(-1, 1, (num_kernals_4))
             dp4 = np.random.rand()
 
             l4 = Conv(l3, weights=w_4, bias=b_4, zero_padding=pad_4, stride=stride_4,
@@ -759,7 +826,7 @@ class TestNN(unittest.TestCase):
             pad_6 = 0
             stride_6 = 1
             w_6 = np.random.randn(num_kernals_6, num_kernals_4, rec_h_6, rec_w_6)
-            b_6 = np.random.uniform(-1, 1, (1, num_kernals_6))
+            b_6 = np.random.uniform(-1, 1, (num_kernals_6))
             dp6 = np.random.rand()
 
             l6 = Conv(l5, weights=w_6, bias=b_6, zero_padding=pad_6, stride=stride_6,
@@ -773,7 +840,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 8 - FC
             w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
-            b_8 = np.random.uniform(-1, 1, (1, 32))
+            b_8 = np.random.uniform(-1, 1, (32))
             dp8 = np.random.rand()
             l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
                     name='FC-8', batchnorm=True, dropout=dp8)
@@ -782,7 +849,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 9 - FC
             w_9 = np.random.randn(w_8.shape[-1], 16)
-            b_9 = np.random.uniform(-1, 1, (1, 16))
+            b_9 = np.random.uniform(-1, 1, (16))
             dp9 = np.random.rand()
             l9 = FC(l8, num_neurons=w_9.shape[-1], weights=w_9, bias=b_9,
                     activation_fn='Linear', name='FC-9', batchnorm=True, dropout=dp9)
@@ -791,7 +858,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 10 - SoftMax
             w_10 = np.random.randn(w_9.shape[-1], 10)
-            b_10 = np.random.uniform(-1, 1, (1, 10))
+            b_10 = np.random.uniform(-1, 1, (10))
             l10 = FC(l9, num_neurons=w_10.shape[-1], weights=w_10, bias=b_10,
                      activation_fn='SoftMax', name='Softmax-10')
 
@@ -850,7 +917,7 @@ class TestNN(unittest.TestCase):
             pad_1 = 1
             stride_1 = 1
             w_1 = np.random.randn(num_kernals_1, depth, rec_h_1, rec_w_1)
-            b_1 = np.random.uniform(-1, 1, (1, num_kernals_1))
+            b_1 = np.random.uniform(-1, 1, (num_kernals_1))
             dp1 = np.random.rand()
 
             l1 = Conv(X, weights=w_1, bias=b_1, zero_padding=pad_1, stride=stride_1,
@@ -968,7 +1035,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 8 - FC
             w_8 = np.random.randn(np.prod(l7.shape[1:]), 32)
-            b_8 = np.random.uniform(-1, 1, (1, 32))
+            b_8 = np.random.uniform(-1, 1, (32))
             dp8 = np.random.rand()
             l8 = FC(l7, num_neurons=w_8.shape[-1], weights=w_8, bias=b_8, activation_fn='Tanh',
                     name='FC-8', batchnorm=True, dropout=dp8)
@@ -977,7 +1044,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 9 - SoftMax
             w_9 = np.random.randn(w_8.shape[-1], 10)
-            b_9 = np.random.uniform(-1, 1, (1, 10))
+            b_9 = np.random.uniform(-1, 1, (10))
             l9 = FC(l8, num_neurons=w_9.shape[-1], weights=w_9, bias=b_9, activation_fn='SoftMax',
                     name='Softmax-10')
 
@@ -1017,11 +1084,11 @@ class TestNN(unittest.TestCase):
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 2
             w_2 = np.random.randn(b_1.shape[-1], 20) * 0.01
-            b_2 = np.random.uniform(-1, 1, (1, 20)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (20)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1046,11 +1113,11 @@ class TestNN(unittest.TestCase):
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 2
             w_2 = np.random.randn(b_1.shape[-1], 10) * 0.01
-            b_2 = np.random.uniform(-1, 1, (1, 10)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (10)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1073,18 +1140,18 @@ class TestNN(unittest.TestCase):
             num_neurons_fc = 30
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
             w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * 0.01
-            b_1 = np.random.uniform(-1, 1, (1, num_neurons_fc)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
 
             # Layer 2
             num_neurons_rnn = 15
             w_2h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_2x = np.random.randn(w_1.shape[-1], num_neurons_rnn) * 0.01
             w_2 = {'hidden': w_2h, 'inp': w_2x}
-            b_2 = np.random.uniform(-1, 1, (1, num_neurons_rnn)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 3
             w_3 = np.random.randn(b_2.shape[-1], 20) * 0.01
-            b_3 = np.random.uniform(-1, 1, (1, 20)) * 0.01
+            b_3 = np.random.uniform(-1, 1, (20)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1114,18 +1181,18 @@ class TestNN(unittest.TestCase):
             w_1h = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_1) * 0.01
             w_1x = np.random.randn(inp_feat_size, num_neurons_rnn_1) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (1, num_neurons_rnn_1)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn_1)) * 0.01
 
             # Layer 2
             num_neurons_rnn_2 = 31
             w_2h = np.random.randn(num_neurons_rnn_2, num_neurons_rnn_2) * 0.01
             w_2x = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_2) * 0.01
             w_2 = {'hidden': w_2h, 'inp': w_2x}
-            b_2 = np.random.uniform(-1, 1, (1, num_neurons_rnn_2)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn_2)) * 0.01
 
             # Layer 3
             w_3 = np.random.randn(b_2.shape[-1], 24) * 0.01
-            b_3 = np.random.uniform(-1, 1, (1, 24)) * 0.01
+            b_3 = np.random.uniform(-1, 1, (24)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1140,6 +1207,155 @@ class TestNN(unittest.TestCase):
                      name='RNN-2')
             mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
+
+    def test_backward_LSTM(self):
+        self.delta = 1e-5
+
+        def test(inp, layers):
+            nn = NN(inp, layers)
+            nn_out = nn.forward(inp)
+            inp_grad = np.random.uniform(-1, 1, nn_out.shape)
+            # inp_grad = np.ones_like(inp_grad)
+            inputs_grad = nn.backward(inp_grad)
+
+            for layer in layers:
+                if layer.type == 'FC_Layer':
+                    self.fc_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                elif layer.type == 'RNN_Layer':
+                    self.rnn_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                elif layer.type == 'LSTM_Layer':
+                    self.lstm_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+
+            # Inputs finite difference gradients
+            self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
+
+        for _ in range(1):
+            # Case-1 - Continuous Inputs
+            # --------------------------
+            # Layer 1
+            seq_len = 100
+            num_neurons_lstm = 15
+            X = np.random.uniform(-1, 1, (seq_len, 25)) * 0.01
+            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
+            # b_1 = np.random.rand(4 * num_neurons_lstm) * 0.01
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+
+            # Layer 2
+            w_2 = np.random.randn(num_neurons_lstm, 20) * 0.01
+            b_2 = np.random.uniform(-1, 1, (20)) * 0.01
+
+            # LSTM Architecture
+            # -----------------
+            dp1 = None#np.random.rand()
+            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            # l1.dropout_mask = mask_l1
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-2- OneHot Inputs
+            # ---------------------
+            # Layer 1
+            seq_len = 101
+            num_neurons_lstm = 24
+            X = np.zeros((seq_len, 13), dtype=conf.dtype)
+            X[range(seq_len), np.random.randint(13, size=seq_len)] = 1
+            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+
+            # Layer 2
+            w_2 = np.random.randn(num_neurons_lstm, 10) * 0.01
+            b_2 = np.random.uniform(-1, 1, (10)) * 0.01
+
+            # LSTM Architecture
+            # -----------------
+            dp1 = None#np.random.rand()
+            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            # l1.dropout_mask = mask_l1
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-3 - Sandwitched Layers - FC - LSTM - FC
+            # --------------------------------------------
+            # Layer 1
+            batch_size = seq_len = 99
+            inp_feat_size = 25
+            num_neurons_fc = 30
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
+            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+
+            # Layer 2
+            num_neurons_lstm = 15
+            w_2 = \
+                np.random.randn((num_neurons_lstm + num_neurons_fc), (4 * num_neurons_lstm)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+
+            # Layer 3
+            w_3 = np.random.randn(num_neurons_lstm, 20) * 0.01
+            b_3 = np.random.uniform(-1, 1, (20)) * 0.01
+
+            # LSTM Architecture
+            # -----------------
+            dp1 = None#np.random.rand()
+            l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU', dropout=dp1, name='FC-1')
+            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_fc) < dp1, dtype=conf.dtype)
+            # l1.dropout_mask = mask_l1
+
+            dp2 = None #np.random.rand()
+            l2 = LSTM(l1, num_neurons_lstm, w_2, b_2, seq_len, dropout=dp2, name='LSTM-2')
+            # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
+            # l2.dropout_mask = mask_l2
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
+
+            # Case-4 - Sandwitched Layers - LSTM - LSTM - FC
+            # ----------------------------------------------
+            # Layer 1
+            batch_size = seq_len = 90
+            inp_feat_size = 17
+            num_neurons_lstm_1 = 11
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
+            w_1 = \
+                np.random.randn((num_neurons_lstm_1 + X.shape[-1]), (4 * num_neurons_lstm_1)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_1)) * 0.01
+
+            # Layer 2
+            num_neurons_lstm_2 = 31
+            w_2 = np.random.randn((num_neurons_lstm_2 + num_neurons_lstm_1),
+                                  (4 * num_neurons_lstm_2)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_2)) * 0.01
+
+            # Layer 3
+            w_3 = np.random.randn(num_neurons_lstm_2, 24) * 0.01
+            b_3 = np.random.uniform(-1, 1, (24)) * 0.01
+
+            # LSTM Architecture
+            # -----------------
+            dp1 = None #np.random.rand()
+            l1 = LSTM(X, num_neurons_lstm_1, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
+            # l1.dropout_mask = mask_l1
+
+            dp2 = None #np.random.rand()
+            l2 = LSTM(l1, num_neurons_lstm_2, w_2, b_2, seq_len, dropout=dp2, name='LSTM-2')
+            # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
+            # l2.dropout_mask = mask_l2
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 
@@ -1176,7 +1392,7 @@ class TestNN(unittest.TestCase):
             pad_1 = 2
             stride_1 = 1
             w_1 = np.random.randn(num_kernals_1, depth, rec_h_1, rec_w_1)
-            b_1 = np.random.uniform(-1, 1, (1, num_kernals_1))
+            b_1 = np.random.uniform(-1, 1, (num_kernals_1))
             dp1 = None
             l1 = Conv(X, weights=w_1, bias=b_1, zero_padding=pad_1, stride=stride_1,
                       activation_fn='ReLU', name='Conv-1', batchnorm=bn, dropout=dp1)
@@ -1194,7 +1410,7 @@ class TestNN(unittest.TestCase):
             pad_3 = 2
             stride_3 = 1
             w_3 = np.random.randn(num_kernals_3, num_kernals_1, rec_h_3, rec_w_3)
-            b_3 = np.random.uniform(-1, 1, (1, num_kernals_3))
+            b_3 = np.random.uniform(-1, 1, (num_kernals_3))
             dp3 = None
             l3 = Conv(l2, weights=w_3, bias=b_3, zero_padding=pad_3, stride=stride_3,
                       activation_fn='ReLU', name='Conv-3', batchnorm=bn, dropout=dp3)
@@ -1213,7 +1429,7 @@ class TestNN(unittest.TestCase):
             pad_5 = 2
             stride_5 = 1
             w_5 = np.random.randn(num_kernals_5, num_kernals_3, rec_h_5, rec_w_5)
-            b_5 = np.random.uniform(-1, 1, (1, num_kernals_5))
+            b_5 = np.random.uniform(-1, 1, (num_kernals_5))
             dp5 = None
             l5 = Conv(l4, weights=w_5, bias=b_5, zero_padding=pad_5, stride=stride_5,
                       activation_fn='ReLU', name='Conv-5', batchnorm=bn, dropout=dp5)
@@ -1227,7 +1443,7 @@ class TestNN(unittest.TestCase):
 
             # Layer 7 - SoftMax
             w_7 = np.random.randn(np.prod(l6.shape[1:]), 10)
-            b_7 = np.random.uniform(-1, 1, (1, 10))
+            b_7 = np.random.uniform(-1, 1, (10))
             l7 = FC(l6, num_neurons=10, weights=w_7, bias=b_7, activation_fn='SoftMax',
                     name='Softmax-7')
 

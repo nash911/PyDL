@@ -59,13 +59,15 @@ class NN:
 
         layer_inp_grad = inp_grad
         for layer in reversed(self._layers):
-            if layer.type == 'RNN_Layer' and type(layer_inp_grad) is not OrderedDict:
+            if layer.type in ['RNN_Layer', 'LSTM_Layer'] and \
+               type(layer_inp_grad) is not OrderedDict:
                 # If the current layer is RNN, while the previous layer was not
                 inp_grad_dict = OrderedDict()
                 for t, grad in enumerate(layer_inp_grad, start=1):
                     inp_grad_dict[t] = grad
                 layer_inp_grad = inp_grad_dict
-            elif layer.type != 'RNN_Layer' and type(layer_inp_grad) is OrderedDict:
+            elif layer.type not in ['RNN_Layer', 'LSTM_Layer'] and \
+                    type(layer_inp_grad) is OrderedDict:
                 # If the current layer is not RNN, while the previous layer was
                 seq_len = len(layer_inp_grad)
                 layer_inp_grad = np.vstack([layer_inp_grad[t] for t in range(1, seq_len + 1)])

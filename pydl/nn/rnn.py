@@ -304,9 +304,9 @@ class RNN(Layer):
 
     def reset(self):
         self.reset_gradients()
-        self.reset_hidden_state(hidden_state='previous_state')
+        self.reset_internal_states(hidden_state='previous_state')
 
-    def reset_hidden_state(self, hidden_state=None):
+    def reset_internal_states(self, hidden_state=None):
         try:
             if hidden_state.lower() == 'previous_state':
                 hidden_state = list(self._output.values())[-1]

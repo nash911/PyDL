@@ -34,6 +34,14 @@ class Activation(ABC):
     def type(self):
         return self._type
 
+    @property
+    def input(self):
+        return self._inputs
+
+    @property
+    def output(self):
+        return self._outputs
+
     # Abstract Methods
     # ----------------
     @abstractmethod

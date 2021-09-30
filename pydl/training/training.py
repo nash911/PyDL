@@ -336,7 +336,7 @@ class Training(ABC):
         num_batches = int(np.ceil(X.shape[0] / batch_size))
 
         # Reset hidden state of RNN layers, if any
-        self.reset_rnn_layers()
+        self.reset_recurrent_layers()
 
         batch_l = list()
         for i in range(num_batches):
@@ -348,7 +348,7 @@ class Training(ABC):
             else:
                 end = start + batch_size
             batch_l.append(self.loss(X[start:end], y[start:end], inference))
-            self.reset_rnn_layers(hidden_state='previous_state')
+            self.reset_recurrent_layers(hidden_state='previous_state')
 
         return np.mean(batch_l)
 
@@ -358,7 +358,7 @@ class Training(ABC):
         num_batches = int(np.ceil(X.shape[0] / batch_size))
 
         # Reset hidden state of RNN layers, if any
-        self.reset_rnn_layers()
+        self.reset_recurrent_layers()
 
         test_prob = list()
         for i in range(num_batches):
@@ -368,7 +368,7 @@ class Training(ABC):
             else:
                 end = start + batch_size
             test_prob.append(self._nn.forward(X[start:end], inference))
-            self.reset_rnn_layers(hidden_state='previous_state')
+            self.reset_recurrent_layers(hidden_state='previous_state')
 
         test_prob = np.vstack(test_prob)
 
@@ -392,7 +392,7 @@ class Training(ABC):
         num_batches = int(np.ceil(X.shape[0] / batch_size))
 
         # # Reset hidden state of RNN layers, if any
-        # self.reset_rnn_layers()
+        # self.reset_recurrent_layers()
 
         test_pred = list()
         for i in range(num_batches):
@@ -402,7 +402,7 @@ class Training(ABC):
             else:
                 end = start + batch_size
             test_pred.append(self._nn.forward(X[start:end], inference))
-            self.reset_rnn_layers(hidden_state='previous_state')
+            self.reset_recurrent_layers(hidden_state='previous_state')
         test_pred = np.concatenate(test_pred, axis=0)
 
         colors = ['red', 'blue', 'green', 'purple', 'orange']
@@ -414,10 +414,10 @@ class Training(ABC):
         plt.show(block=False)
         plt.pause(0.01)
 
-    def reset_rnn_layers(self, hidden_state=None):
+    def reset_recurrent_layers(self, hidden_state=None):
         for layer in self._nn.layers:
-            if layer.type in ['RNN_Layer']:
-                layer.reset_hidden_state(hidden_state)
+            if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                layer.reset_internal_states(hidden_state)
 
     def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
                   test_loss, train_accuracy, test_accuracy, log_freq=1):
@@ -572,13 +572,13 @@ class Training(ABC):
 
             # Forward propagate throug the network
             for layer in self._nn.layers:
-                if layer.type in ['RNN_Layer']:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
                     if n == 0:
                         # Reset hidden state at the beginning of sequence generation
-                        layer.reset_hidden_state()
+                        layer.reset_internal_states()
                     input = np.copy(layer.forward(input, inference=True)[1])
                     # Set previous hidden state (h_t-1) to current hidden state output (h_t)
-                    layer.reset_hidden_state(input)
+                    layer.reset_internal_states('previous_state')
                 else:
                     probs = layer.forward(input, inference=True, temperature=temperature)
                     sampled_idx = np.random.choice(range(self._nn.num_classes),
@@ -594,10 +594,10 @@ class Training(ABC):
         sampled_data = [input]
         for n in range(sample_length):
             for layer in self._nn.layers:
-                if layer.type in ['RNN_Layer']:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
                     input = np.copy(layer.forward(input, inference=True)[1])
                     # Set previous hidden state (h_t-1) to current hidden state output (h_t)
-                    layer.reset_hidden_state(input)
+                    layer.reset_internal_states('previous_state')
                 else:
                     input = layer.forward(input, inference=True)
                     sampled_data.append(input)
@@ -736,7 +736,7 @@ class Training(ABC):
                     self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, inference=True)
 
             # End of an epoch - Reset RNN layers
-            self.reset_rnn_layers()
+            self.reset_recurrent_layers()
 
         training_logs_dict = OrderedDict()
         training_logs_dict['epochs'] = epochs_list
@@ -778,7 +778,7 @@ class SGD(Training):
 
     def update_network(self, t=None):
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 layer.weights += -self._step_size * layer.weights_grad
                 if layer.bias is not None:
                     layer.bias += -self._step_size * layer.bias_grad
@@ -797,7 +797,7 @@ class Momentum(Training):
     def init_momentum_velocity(self):
         # Initialize momentum velocities to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 v = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
             else:
@@ -830,7 +830,7 @@ class Momentum(Training):
 
     def update_network(self, t=None):
         for layer, v in zip(self._nn.layers, self._vel):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 v['w'] = (v['w'] * self._mu) - (self._step_size * layer.weights_grad)
                 v['b'] = (v['b'] * self._mu) - (self._step_size * layer.bias_grad)
 
@@ -851,7 +851,7 @@ class RMSprop(Training):
     def init_rmsprop_cache(self):
         # Initialize cache to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 c = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
             else:
@@ -884,7 +884,7 @@ class RMSprop(Training):
 
     def update_network(self, t=None):
         for layer, c in zip(self._nn.layers, self._cache):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (layer.weights_grad**2))
                 c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (layer.bias_grad**2))
 
@@ -907,7 +907,7 @@ class Adam(Training):
     def init_adam_moment(self):
         # Initialize cache to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 m = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
 
@@ -945,7 +945,7 @@ class Adam(Training):
 
     def update_network(self, t):
         for layer, m, v in zip(self._nn.layers, self._m, self._v):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 # First order moment update
                 m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * layer.weights_grad)
                 m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * layer.bias_grad)
