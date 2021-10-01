@@ -100,29 +100,29 @@ class LSTM(Layer):
     def num_neurons(self):
         return self._num_neurons
 
-    # def reinitialize_weights(self, inputs=None, num_neurons=None):
-    #     num_feat = self._inp_size if inputs is None else np.prod(inputs.shape[1:])
-    #     num_neurons = self._num_neurons if num_neurons is None else num_neurons
-    #
-    #     # Reinitialize weights
-    #     self._weights['hidden'] = np.random.randn(num_neurons, num_neurons) * self._weight_scale
-    #     self._weights['inp'] = np.random.randn(num_feat, num_neurons) * self._weight_scale
-    #     if self._xavier:
-    #         # Apply Xavier Initialization
-    #         if self._activation_fn[0].type.lower() == 'relu':
-    #             norm_fctr = np.sqrt((num_neurons + num_feat) / 2.0)
-    #         else:
-    #             norm_fctr = np.sqrt(num_neurons + num_feat)
-    #         self._weights /= norm_fctr
-    #
-    #     # Reset layer size
-    #     self._inp_size = num_feat
-    #     self._num_neurons = num_neurons
-    #
-    #     if self._has_bias:
-    #         self._bias = np.zeros(num_neurons, dtype=conf.dtype)
-    #
-    #     self.reset_gradients()
+    def reinitialize_weights(self, inputs=None, num_neurons=None):
+        num_feat = self._inp_size if inputs is None else np.prod(inputs.shape[1:])
+        num_neurons = self._num_neurons if num_neurons is None else num_neurons
+
+        # Reinitialize weights
+        self._weights = np.random.randn((self._num_neurons + self._inp_size),
+                                        int(4 * self._num_neurons)) * self._weight_scale
+        if self._xavier:
+            # Apply Xavier Initialization
+            norm_fctr = np.sqrt(self._num_neurons + self._inp_size)
+            self._weights /= norm_fctr
+
+        # Reset layer size
+        self._inp_size = num_feat
+        self._num_neurons = num_neurons
+
+        if self._has_bias:
+            if np.all(self._bias == self._bias[0]):
+                self._bias = np.ones(int(4 * num_neurons), dtype=conf.dtype) * self._bias[0]
+            else:
+                self._bias = np.zeros(int(4 * num_neurons), dtype=conf.dtype)
+
+        self.reset_gradients()
 
     def reset_gradients(self):
         self._weights_grad = np.zeros_like(self._weights)
