@@ -44,10 +44,13 @@ class NN:
         layer_inp = inputs
         for layer in self._layers:
             layer_out = layer.forward(layer_inp, inference=inference)
-            if type(layer_out) is OrderedDict:  # If the previous layer was RNN
+            if type(layer_out) is OrderedDict:  # If the current layer is RNN/LSTM
                 # Stack layer outputs as dicts into a numpy array
-                seq_len = len(layer_out)
-                layer_inp = np.vstack([layer_out[t] for t in range(1, seq_len)])
+                if layer.architecture_type == 'many_to_many':
+                    seq_len = len(layer_out)
+                    layer_inp = np.vstack([layer_out[t] for t in range(1, seq_len)])
+                else:  # 'many_to_one'
+                    layer_inp = list(layer_out.values())[-1]
             else:
                 layer_inp = layer_out
         self._network_out = layer_out
@@ -63,8 +66,11 @@ class NN:
                type(layer_inp_grad) is not OrderedDict:
                 # If the current layer is RNN, while the previous layer was not
                 inp_grad_dict = OrderedDict()
-                for t, grad in enumerate(layer_inp_grad, start=1):
-                    inp_grad_dict[t] = grad
+                if layer.architecture_type == 'many_to_many':
+                    for t, grad in enumerate(layer_inp_grad, start=1):
+                        inp_grad_dict[t] = grad
+                else:  # 'many_to_one'
+                    inp_grad_dict[layer.seq_len] = layer_inp_grad
                 layer_inp_grad = inp_grad_dict
             elif layer.type not in ['RNN_Layer', 'LSTM_Layer'] and \
                     type(layer_inp_grad) is OrderedDict:

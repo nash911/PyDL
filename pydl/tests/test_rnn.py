@@ -57,10 +57,15 @@ class TestRNN(unittest.TestCase):
             test(X, w, seq_len=2, true_out=true_out, bias=bias)
 
     def test_forward(self):
-        def test(inp, w, seq_len, true_out, bias=False, actv_fn='Sigmoid', p=None, mask=None):
+        def test(inp, w, seq_len, true_out, bias=False, actv_fn='Sigmoid', p=None, mask=None,
+                 architecture_type='many_to_many'):
             num_neur = w['hidden'].shape[0]
-            rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn, dropout=p)
+            rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn,
+                      architecture_type=architecture_type, dropout=p)
             out_rnn = rnn.forward(inp, mask=mask)
+
+            # Check if the output has the right keys
+            npt.assert_equal(out_rnn.keys(), true_out.keys())
 
             for k, v in out_rnn.items():
                 npt.assert_almost_equal(v, true_out[k], decimal=5)
@@ -73,9 +78,11 @@ class TestRNN(unittest.TestCase):
         one_hot = [True, False]
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
         dropout = [True, False]
+        architecture_type = ['many_to_many', 'many_to_one']
 
-        for seq_len, feat, neur, oh, scl, dout in list(itertools.product(
-                sequence_length, feature_size, num_neurons, one_hot, scale, dropout)):
+        for seq_len, feat, neur, oh, scl, dout, a_type in list(itertools.product(
+                sequence_length, feature_size, num_neurons, one_hot, scale, dropout,
+                architecture_type)):
             if oh:
                 X = np.zeros((seq_len, feat), dtype=conf.dtype)
                 rnd_idx = np.random.randint(feat, size=seq_len)
@@ -102,8 +109,14 @@ class TestRNN(unittest.TestCase):
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
                     h *= mask[-1]
-                true_out_linear[i + 1] = h
-            test(X, w, seq_len, true_out_linear, bias, actv_fn='Linear', p=p, mask=mask)
+                if a_type == 'many_to_one':
+                    if i == seq_len - 1:
+                        true_out_linear = OrderedDict()
+                        true_out_linear[i + 1] = h
+                else:
+                    true_out_linear[i + 1] = h
+            test(X, w, seq_len, true_out_linear, bias, actv_fn='Linear', p=p, mask=mask,
+                 architecture_type=a_type)
 
             # Sigmoid
             h = np.zeros((1, neur), dtype=conf.dtype)
@@ -120,8 +133,14 @@ class TestRNN(unittest.TestCase):
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
                     h *= mask[-1]
-                true_out_sigmoid[i + 1] = h
-            test(X, w, seq_len, true_out_sigmoid, bias, actv_fn='Sigmoid', p=p, mask=mask)
+                if a_type == 'many_to_one':
+                    if i == seq_len - 1:
+                        true_out_sigmoid = OrderedDict()
+                        true_out_sigmoid[i + 1] = h
+                else:
+                    true_out_sigmoid[i + 1] = h
+            test(X, w, seq_len, true_out_sigmoid, bias, actv_fn='Sigmoid', p=p, mask=mask,
+                 architecture_type=a_type)
 
             # Tanh
             h = np.zeros((1, neur), dtype=conf.dtype)
@@ -138,8 +157,14 @@ class TestRNN(unittest.TestCase):
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
                     h *= mask[-1]
-                true_out_tanh[i + 1] = h
-            test(X, w, seq_len, true_out_tanh, bias, actv_fn='Tanh', p=p, mask=mask)
+                if a_type == 'many_to_one':
+                    if i == seq_len - 1:
+                        true_out_tanh = OrderedDict()
+                        true_out_tanh[i + 1] = h
+                else:
+                    true_out_tanh[i + 1] = h
+            test(X, w, seq_len, true_out_tanh, bias, actv_fn='Tanh', p=p, mask=mask,
+                 architecture_type=a_type)
 
             # ReLU
             h = np.zeros((1, neur), dtype=conf.dtype)
@@ -156,8 +181,14 @@ class TestRNN(unittest.TestCase):
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
                     h *= mask[-1]
-                true_out_relu[i + 1] = h
-            test(X, w, seq_len, true_out_relu, bias, actv_fn='ReLU', p=p, mask=mask)
+                if a_type == 'many_to_one':
+                    if i == seq_len - 1:
+                        true_out_relu = OrderedDict()
+                        true_out_relu[i + 1] = h
+                else:
+                    true_out_relu[i + 1] = h
+            test(X, w, seq_len, true_out_relu, bias, actv_fn='ReLU', p=p, mask=mask,
+                 architecture_type=a_type)
 
             # SoftMax
             h = np.zeros((1, neur), dtype=conf.dtype)
@@ -175,18 +206,26 @@ class TestRNN(unittest.TestCase):
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
                     h *= mask[-1]
-                true_out_softmax[i + 1] = h
-            test(X, w, seq_len, true_out_softmax, bias, actv_fn='Softmax', p=p, mask=mask)
+                if a_type == 'many_to_one':
+                    if i == seq_len - 1:
+                        true_out_softmax = OrderedDict()
+                        true_out_softmax[i + 1] = h
+                else:
+                    true_out_softmax[i + 1] = h
+            test(X, w, seq_len, true_out_softmax, bias, actv_fn='Softmax', p=p, mask=mask,
+                 architecture_type=a_type)
 
     def test_backward_gradients_finite_difference(self):
         self.delta = 1e-6
         tol = 8
 
-        def test(inp, w, seq_len, inp_grad, bias=False, actv_fn='Sigmoid', p=None, mask=None):
+        def test(inp, w, seq_len, inp_grad, bias=False, actv_fn='Sigmoid', p=None, mask=None,
+                 architecture_type='many_to_many'):
             num_neur = w['hidden'].shape[0]
             wh = w['hidden']
             wx = w['inp']
-            rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn, dropout=p)
+            rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn,
+                      architecture_type=architecture_type, dropout=p)
             _ = rnn.forward(inp, mask=mask)
             inputs_grad = rnn.backward(inp_grad)
             hidden_weights_grad = rnn.hidden_weights_grad
@@ -203,11 +242,12 @@ class TestRNN(unittest.TestCase):
                     lhs = copy.deepcopy(rnn.forward(inp, mask=mask))
                     rnn.hidden_weights = wh - w_delta
                     rhs = copy.deepcopy(rnn.forward(inp, mask=mask))
-                    lhs_sum = np.zeros_like(lhs[0])
-                    rhs_sum = np.zeros_like(rhs[0])
-                    for k in list(lhs.keys())[1:]:
-                        lhs_sum += lhs[k] * inp_grad[k]
-                        rhs_sum += rhs[k] * inp_grad[k]
+                    lhs_sum = np.zeros_like(list(lhs.values())[0])
+                    rhs_sum = np.zeros_like(list(rhs.values())[0])
+                    for k in list(lhs.keys()):
+                        if k > 0:
+                            lhs_sum += lhs[k] * inp_grad[k]
+                            rhs_sum += rhs[k] * inp_grad[k]
                     hidden_weights_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             rnn.hidden_weights = wh
@@ -222,11 +262,12 @@ class TestRNN(unittest.TestCase):
                     lhs = copy.deepcopy(rnn.forward(inp, mask=mask))
                     rnn.input_weights = wx - w_delta
                     rhs = copy.deepcopy(rnn.forward(inp, mask=mask))
-                    lhs_sum = np.zeros_like(lhs[0])
-                    rhs_sum = np.zeros_like(rhs[0])
-                    for k in list(lhs.keys())[1:]:
-                        lhs_sum += lhs[k] * inp_grad[k]
-                        rhs_sum += rhs[k] * inp_grad[k]
+                    lhs_sum = np.zeros_like(list(lhs.values())[0])
+                    rhs_sum = np.zeros_like(list(rhs.values())[0])
+                    for k in list(lhs.keys()):
+                        if k > 0:
+                            lhs_sum += lhs[k] * inp_grad[k]
+                            rhs_sum += rhs[k] * inp_grad[k]
                     input_weights_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             rnn.input_weights = wx
@@ -240,11 +281,12 @@ class TestRNN(unittest.TestCase):
                 lhs = copy.deepcopy(rnn.forward(inp, mask=mask))
                 rnn.bias = bias - bias_delta
                 rhs = copy.deepcopy(rnn.forward(inp, mask=mask))
-                lhs_sum = np.zeros_like(lhs[0])
-                rhs_sum = np.zeros_like(rhs[0])
-                for k in list(lhs.keys())[1:]:
-                    lhs_sum += lhs[k] * inp_grad[k]
-                    rhs_sum += rhs[k] * inp_grad[k]
+                lhs_sum = np.zeros_like(list(lhs.values())[0])
+                rhs_sum = np.zeros_like(list(rhs.values())[0])
+                for k in list(lhs.keys()):
+                    if k > 0:
+                        lhs_sum += lhs[k] * inp_grad[k]
+                        rhs_sum += rhs[k] * inp_grad[k]
                 bias_finite_diff[i] = \
                     np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             rnn.bias = bias
@@ -258,11 +300,12 @@ class TestRNN(unittest.TestCase):
                     i_delta[i, j] = self.delta
                     lhs = copy.deepcopy(rnn.forward(inp + i_delta, mask=mask))
                     rhs = copy.deepcopy(rnn.forward(inp - i_delta, mask=mask))
-                    lhs_sum = np.zeros_like(lhs[0])
-                    rhs_sum = np.zeros_like(rhs[0])
-                    for k in list(lhs.keys())[1:]:
-                        lhs_sum += lhs[k] * inp_grad[k]
-                        rhs_sum += rhs[k] * inp_grad[k]
+                    lhs_sum = np.zeros_like(list(lhs.values())[0])
+                    rhs_sum = np.zeros_like(list(rhs.values())[0])
+                    for k in list(lhs.keys()):
+                        if k > 0:
+                            lhs_sum += lhs[k] * inp_grad[k]
+                            rhs_sum += rhs[k] * inp_grad[k]
                     inputs_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
 
@@ -302,11 +345,13 @@ class TestRNN(unittest.TestCase):
         unit_inp_grad = [True, False]
         activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'ReLU', 'Softmax']
         dropout = [True, False]
+        architecture_type = ['many_to_many', 'many_to_one']
         repeat = list(range(1))
 
-        for seq_len, feat, neur, oh, scl, unit, actv, dout, r in \
+        for seq_len, feat, neur, oh, scl, unit, actv, dout, a_type, r in \
             list(itertools.product(sequence_length, feature_size, num_neurons, one_hot, scale,
-                                   unit_inp_grad, activation_fn, dropout, repeat)):
+                                   unit_inp_grad, activation_fn, dropout, architecture_type,
+                                   repeat)):
 
             # Initialize inputs
             if oh:
@@ -324,8 +369,12 @@ class TestRNN(unittest.TestCase):
 
             # Initialize input gradients
             inp_grad = OrderedDict()
-            for s in range(1, seq_len + 1):
-                inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+            if a_type == 'many_to_many':
+                for s in range(1, seq_len + 1):
+                    inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+                        np.random.uniform(-1, 1, (1, neur))
+            else:
+                inp_grad[seq_len] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                     np.random.uniform(-1, 1, (1, neur))
 
             # Set dropout mask
@@ -338,7 +387,7 @@ class TestRNN(unittest.TestCase):
                 p = None
                 mask = None
 
-            test(X, w, seq_len, inp_grad, bias, actv, p, mask)
+            test(X, w, seq_len, inp_grad, bias, actv, p, mask, a_type)
 
 
 if __name__ == '__main__':

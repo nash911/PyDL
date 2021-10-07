@@ -8,6 +8,7 @@
 # ------------------------------------------------------------------------
 
 import numpy as np
+import sys
 from collections import OrderedDict
 
 from pydl.nn.layers import Layer
@@ -21,7 +22,7 @@ class LSTM(Layer):
     """The LSTM Layer Class."""
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, seq_len=None, xavier=True,
-                 weight_scale=1.0, dropout=None, name=None):
+                 weight_scale=1.0, architecture_type='many_to_many', dropout=None, name=None):
         super().__init__(name=name)
         self._weights = OrderedDict()
         self._inputs = OrderedDict()
@@ -30,6 +31,12 @@ class LSTM(Layer):
 
         self._weights_grad = OrderedDict()
         self._out_grad = OrderedDict()
+
+        if architecture_type.lower() not in ['many_to_many', 'many_to_one']:
+            sys.exit("Error: Unknown model type in LSTM_Layer. Use either 'many_to_many' or " +
+                     "'many_to_one'.")
+        else:
+            self._architecture_type = architecture_type.lower()
 
         self._type = 'LSTM_Layer'
         self._num_neurons = num_neurons
@@ -88,6 +95,14 @@ class LSTM(Layer):
 
     # Getters
     # -------
+    @property
+    def architecture_type(self):
+        return self._architecture_type
+
+    @property
+    def seq_len(self):
+        return self._seq_len
+
     @property
     def shape(self):
         return (None, self._num_neurons)
@@ -211,23 +226,40 @@ class LSTM(Layer):
             #         else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
             #             pass  # Do nothing - Inverse Dropout
 
-        return self._output
+        if self._architecture_type == 'many_to_one':
+            # Pass through the output of the final sequence only
+            single_out_dict = OrderedDict()
+            single_out_dict[list(self._output.keys())[-1]] = list(self._output.values())[-1]
+            return single_out_dict
+        else:
+            return self._output
 
     def backward(self, inp_grad, reg_lambda=0, inputs=None):
         cell_grad = np.zeros((1, self.num_neurons), dtype=conf.dtype)
         hidden_grad = np.zeros((1, self.num_neurons), dtype=conf.dtype)
-        for t in reversed(range(1, len(inp_grad) + 1)):
-            # Add gradients from the next hidden sequence (h_t+1) and from the layer above (h_l+1)
-            grad = hidden_grad + inp_grad[t]
+        for t in reversed(range(1, self._seq_len + 1)):
+            # Add gradients from the next (t+1) hidden sequence and from the layer above (l+1)
+            if self._architecture_type == 'many_to_one':
+                if t <= list(inp_grad.keys())[-1]:
+                    if t == list(inp_grad.keys())[-1]:
+                        grad = hidden_grad + inp_grad[t]
+                    else:
+                        grad = hidden_grad
+                        if len(grad.shape) == 1:
+                            grad = np.expand_dims(grad, axis=0)
+                else:
+                    continue
+            else:
+                try:
+                    grad = hidden_grad + inp_grad[t]
+                except KeyError:
+                    continue
 
             # # Backpropagating through Dropout
             # if self._dropout is not None:
             #     drop_grad = self._dropout[t].backward(grad)
             # else:
             #     drop_grad = grad
-
-            # o_out = self._o_gate[t].output
-            # cell_state_tanh = self._cell_state_activation_fn[t].output
 
             # Outputs of gate activations
             i_out = self._i_gate[t].output

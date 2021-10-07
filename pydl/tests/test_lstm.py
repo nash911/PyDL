@@ -23,10 +23,12 @@ class TestLSTM(unittest.TestCase):
         self.delta = 1e-6
         tol = 8
 
-        def test(inp, num_neur, w, bias, seq_len, inp_grad, p=None, mask=None):
+        def test(inp, num_neur, w, bias, seq_len, inp_grad, p=None, mask=None,
+                 architecture_type='many_to_many'):
             if type(bias) == int:
                 bias = np.ones(4 * num_neur) * bias
-            lstm = LSTM(inp, num_neur, w, bias, seq_len=seq_len, dropout=p)
+            lstm = LSTM(inp, num_neur, w, bias, seq_len=seq_len, dropout=p,
+                        architecture_type=architecture_type)
             _ = lstm.forward(inp, mask=mask)
             inputs_grad = lstm.backward(inp_grad)
             weights_grad = lstm.weights_grad
@@ -42,11 +44,12 @@ class TestLSTM(unittest.TestCase):
                     lhs = copy.deepcopy(lstm.forward(inp, mask=mask))
                     lstm.weights = w - w_delta
                     rhs = copy.deepcopy(lstm.forward(inp, mask=mask))
-                    lhs_sum = np.zeros_like(lhs[0])
-                    rhs_sum = np.zeros_like(rhs[0])
-                    for k in list(lhs.keys())[1:]:
-                        lhs_sum += lhs[k] * inp_grad[k]
-                        rhs_sum += rhs[k] * inp_grad[k]
+                    lhs_sum = np.zeros_like(list(lhs.values())[0])
+                    rhs_sum = np.zeros_like(list(rhs.values())[0])
+                    for k in list(lhs.keys()):
+                        if k > 0:
+                            lhs_sum += lhs[k] * inp_grad[k]
+                            rhs_sum += rhs[k] * inp_grad[k]
                     weights_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             lstm.weights = w
@@ -60,11 +63,12 @@ class TestLSTM(unittest.TestCase):
                 lhs = copy.deepcopy(lstm.forward(inp, mask=mask))
                 lstm.bias = bias - bias_delta
                 rhs = copy.deepcopy(lstm.forward(inp, mask=mask))
-                lhs_sum = np.zeros_like(lhs[0])
-                rhs_sum = np.zeros_like(rhs[0])
-                for k in list(lhs.keys())[1:]:
-                    lhs_sum += lhs[k] * inp_grad[k]
-                    rhs_sum += rhs[k] * inp_grad[k]
+                lhs_sum = np.zeros_like(list(lhs.values())[0])
+                rhs_sum = np.zeros_like(list(rhs.values())[0])
+                for k in list(lhs.keys()):
+                    if k > 0:
+                        lhs_sum += lhs[k] * inp_grad[k]
+                        rhs_sum += rhs[k] * inp_grad[k]
                 bias_finite_diff[i] = \
                     np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             lstm.bias = bias
@@ -78,11 +82,12 @@ class TestLSTM(unittest.TestCase):
                     i_delta[i, j] = self.delta
                     lhs = copy.deepcopy(lstm.forward(inp + i_delta, mask=mask))
                     rhs = copy.deepcopy(lstm.forward(inp - i_delta, mask=mask))
-                    lhs_sum = np.zeros_like(lhs[0])
-                    rhs_sum = np.zeros_like(rhs[0])
-                    for k in list(lhs.keys())[1:]:
-                        lhs_sum += lhs[k] * inp_grad[k]
-                        rhs_sum += rhs[k] * inp_grad[k]
+                    lhs_sum = np.zeros_like(list(lhs.values())[0])
+                    rhs_sum = np.zeros_like(list(rhs.values())[0])
+                    for k in list(lhs.keys()):
+                        if k > 0:
+                            lhs_sum += lhs[k] * inp_grad[k]
+                            rhs_sum += rhs[k] * inp_grad[k]
                     inputs_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
 
@@ -112,11 +117,12 @@ class TestLSTM(unittest.TestCase):
         scale = [1e-2, 1e+0]
         unit_inp_grad = [True, False]
         dropout = [False]
+        architecture_type = ['many_to_many', 'many_to_one']
         repeat = list(range(1))
 
-        for seq_len, feat, neur, b, oh, scl, unit, dout, r in \
+        for seq_len, feat, neur, b, oh, scl, unit, dout, a_type, r in \
             list(itertools.product(sequence_length, feature_size, num_neurons, bias, one_hot, scale,
-                                   unit_inp_grad, dropout, repeat)):
+                                   unit_inp_grad, dropout, architecture_type, repeat)):
 
             # Initialize inputs
             if oh:
@@ -135,8 +141,12 @@ class TestLSTM(unittest.TestCase):
 
             # Initialize input gradients
             inp_grad = OrderedDict()
-            for s in range(1, seq_len + 1):
-                inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+            if a_type == 'many_to_many':
+                for s in range(1, seq_len + 1):
+                    inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+                        np.random.uniform(-1, 1, (1, neur))
+            else:
+                inp_grad[seq_len] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                     np.random.uniform(-1, 1, (1, neur))
 
             # Set dropout mask
@@ -147,7 +157,7 @@ class TestLSTM(unittest.TestCase):
                 p = None
                 mask = None
 
-            test(X, neur, w, bias, seq_len, inp_grad, p, mask)
+            test(X, neur, w, bias, seq_len, inp_grad, p, mask, a_type)
 
 
 if __name__ == '__main__':

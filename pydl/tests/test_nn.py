@@ -1074,7 +1074,8 @@ class TestNN(unittest.TestCase):
             # Inputs finite difference gradients
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
-        for _ in range(1):
+        architecture_type = ['many_to_many', 'many_to_one']
+        for a_type in architecture_type:
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
@@ -1093,8 +1094,8 @@ class TestNN(unittest.TestCase):
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
-            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
-                     name='RNN-1')
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
+                     architecture_type=a_type, dropout=dp1, name='RNN-1')
             mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
@@ -1122,8 +1123,8 @@ class TestNN(unittest.TestCase):
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
-            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
-                     name='RNN-1')
+            l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
+                     architecture_type=a_type, dropout=dp1, name='RNN-1')
             mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
@@ -1161,8 +1162,8 @@ class TestNN(unittest.TestCase):
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
-            l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh', dropout=dp2,
-                     name='RNN-2')
+            l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh',
+                     architecture_type=a_type, dropout=dp2, name='RNN-2')
             mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
 
@@ -1197,14 +1198,14 @@ class TestNN(unittest.TestCase):
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
-            l1 = RNN(X, num_neurons_rnn_1, w_1, b_1, seq_len, activation_fn='Tanh', dropout=dp1,
-                     name='RNN-1')
+            l1 = RNN(X, num_neurons_rnn_1, w_1, b_1, seq_len, activation_fn='Tanh',
+                     architecture_type='many_to_many', dropout=dp1, name='RNN-1')
             mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
-            l2 = RNN(l1, num_neurons_rnn_2, w_2, b_2, seq_len, activation_fn='Tanh', dropout=dp2,
-                     name='RNN-2')
+            l2 = RNN(l1, num_neurons_rnn_2, w_2, b_2, seq_len, activation_fn='Tanh',
+                     architecture_type=a_type, dropout=dp2, name='RNN-2')
             mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
 
@@ -1234,7 +1235,8 @@ class TestNN(unittest.TestCase):
             # Inputs finite difference gradients
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
-        for _ in range(1):
+        architecture_type = ['many_to_many', 'many_to_one']
+        for a_type in architecture_type:
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
@@ -1252,7 +1254,8 @@ class TestNN(unittest.TestCase):
             # LSTM Architecture
             # -----------------
             dp1 = None#np.random.rand()
-            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
+                      name='LSTM-1')
             # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
             # l1.dropout_mask = mask_l1
 
@@ -1278,7 +1281,8 @@ class TestNN(unittest.TestCase):
             # LSTM Architecture
             # -----------------
             dp1 = None#np.random.rand()
-            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
+                      name='LSTM-1')
             # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
             # l1.dropout_mask = mask_l1
 
@@ -1315,7 +1319,8 @@ class TestNN(unittest.TestCase):
             # l1.dropout_mask = mask_l1
 
             dp2 = None #np.random.rand()
-            l2 = LSTM(l1, num_neurons_lstm, w_2, b_2, seq_len, dropout=dp2, name='LSTM-2')
+            l2 = LSTM(l1, num_neurons_lstm, w_2, b_2, seq_len, architecture_type=a_type,
+                      dropout=dp2, name='LSTM-2')
             # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
             # l2.dropout_mask = mask_l2
 
@@ -1348,12 +1353,14 @@ class TestNN(unittest.TestCase):
             # LSTM Architecture
             # -----------------
             dp1 = None #np.random.rand()
-            l1 = LSTM(X, num_neurons_lstm_1, w_1, b_1, seq_len, dropout=dp1, name='LSTM-1')
+            l1 = LSTM(X, num_neurons_lstm_1, w_1, b_1, seq_len, architecture_type='many_to_many',
+                      dropout=dp1, name='LSTM-1')
             # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
             # l1.dropout_mask = mask_l1
 
             dp2 = None #np.random.rand()
-            l2 = LSTM(l1, num_neurons_lstm_2, w_2, b_2, seq_len, dropout=dp2, name='LSTM-2')
+            l2 = LSTM(l1, num_neurons_lstm_2, w_2, b_2, seq_len, architecture_type=a_type,
+                      dropout=dp2, name='LSTM-2')
             # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
             # l2.dropout_mask = mask_l2
 
