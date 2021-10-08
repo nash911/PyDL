@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import Adam
+from pydl.training.adam import Adam
 from pydl import conf
 
 

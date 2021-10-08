@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import SGD
+from pydl.training.sgd import SGD
 from pydl import conf
+
 
 def main():
     mnist = fetch_openml('mnist_784')

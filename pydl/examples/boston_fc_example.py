@@ -12,8 +12,8 @@ from sklearn import datasets
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import SGD
-from pydl.training.training import Adam
+from pydl.training.sgd import SGD
+from pydl.training.adam import Adam
 
 
 def main():
@@ -41,12 +41,12 @@ def main():
 
     # SGD
     sgd = SGD(nn, step_size=1e-3, reg_lambda=1e-1, regression=True)
-    sgd.train(X, y, normalize='mean', epochs=50000, plot='SGD')
+    sgd.train(X, y, normalize='mean', epochs=5000, plot='SGD')
 
     # Adam
     nn.reinitialize_network()
     adam = Adam(nn, step_size=1e-3, beta_1=0.9, beta_2=0.999, reg_lambda=1e-1, regression=True)
-    adam.train(X, y, normalize='mean', epochs=50000, plot='Adam')
+    adam.train(X, y, normalize='mean', epochs=5000, plot='Adam')
 
     input("Press Enter to continue...")
 

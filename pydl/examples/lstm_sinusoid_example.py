@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from pydl.nn.layers import FC
 from pydl.nn.lstm import LSTM
 from pydl.nn.nn import NN
-from pydl.training.training import Momentum
+from pydl.training.momentum import Momentum
 from pydl import conf
 
 
@@ -54,8 +54,8 @@ def main():
 
     momentum = Momentum(nn, step_size=1e-2, mu=0.5, reg_lambda=0, train_size=90, test_size=10,
                         regression=True)
-    momentum.train_rnn(X, batch_size=seq_len, epochs=200, sample_length=1000, log_freq=1,
-                       fit_test_data=True, plot='Sinusoid-LSTM - Momentum')
+    momentum.train_recurrent(X, batch_size=seq_len, epochs=200, sample_length=1000, log_freq=1,
+                             fit_test_data=True, plot='Sinusoid-LSTM - Momentum')
 
     input("Press Enter to continue...")
 

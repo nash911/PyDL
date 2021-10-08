@@ -12,7 +12,7 @@ import numpy as np
 from pydl.nn.layers import FC
 from pydl.nn.rnn import RNN
 from pydl.nn.nn import NN
-from pydl.training.training import SGD
+from pydl.training.sgd import SGD
 from pydl import conf
 
 
@@ -43,8 +43,8 @@ def main():
     nn = NN(None, layers)
 
     sgd = SGD(nn, step_size=1e-1, reg_lambda=0, train_size=90, test_size=10)
-    sgd.train_rnn(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
-                  log_freq=1, plot='Character-RNN - SGD')
+    sgd.train_recurrent(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
+                        log_freq=1, plot='Character-RNN - SGD')
 
     input("Press Enter to continue...")
 

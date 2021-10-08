@@ -1,0 +1,269 @@
+# ------------------------------------------------------------------------
+# MIT License
+#
+# Copyright (c) [2021] [Avinash Ranganath]
+#
+# This code is part of the library PyDL <https://github.com/nash911/PyDL>
+# This code is licensed under MIT license (see LICENSE.txt for details)
+# ------------------------------------------------------------------------
+
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from collections import OrderedDict
+
+from pydl.training.training import Training
+from pydl import conf
+
+
+class RecurrentTraining(Training):
+    """Class for training recurrent NN architectures like RNN and LSTM.
+
+    Args:
+        name (str): Name of the training algorithm.
+    """
+
+    def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+                 activatin_type=None, regression=False, name=None):
+        super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
+                         test_size=test_size, activatin_type=activatin_type, regression=regression,
+                         name=name)
+
+    def reset_recurrent_layers(self, hidden_state=None):
+        for layer in self._nn.layers:
+            if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                layer.reset_internal_states(hidden_state)
+
+    def fit_test_data(self, X, fig, axs, batch_size=None, inference=True):
+        if batch_size is None:
+            batch_size = X.shape[0]
+        num_batches = int(np.ceil(X.shape[0] / batch_size))
+
+        # # Reset hidden state of RNN layers, if any
+        # self.reset_recurrent_layers()
+
+        test_pred = list()
+        for i in range(num_batches):
+            start = int(batch_size * i)
+            if i == num_batches - 1:
+                end = X.shape[0]
+            else:
+                end = start + batch_size
+            test_pred.append(self._nn.forward(X[start:end], inference))
+            self.reset_recurrent_layers(hidden_state='previous_state')
+        test_pred = np.concatenate(test_pred, axis=0)
+
+        colors = ['red', 'blue', 'green', 'purple', 'orange']
+        axs.clear()
+        for c in range(X.shape[-1]):
+            axs.plot(X[1:, c], linestyle='-', color=colors[c])
+            axs.plot(test_pred[:-1, c], '.', color=colors[c])
+
+        plt.show(block=False)
+        plt.pause(0.01)
+
+    def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
+                  test_loss, train_accuracy, test_accuracy, log_freq=1):
+        test_l = self.batch_loss(self._test_X[:-1], self._test_X[1:], batch_size, inference=True,
+                                 log_freq=log_freq)
+        if self._regression:
+            train_l = self.batch_loss(self._train_X[:-1], self._train_X[1:], batch_size,
+                                      inference=True, log_freq=log_freq)
+            train_accur = np.sqrt(train_l)
+            test_accur = np.sqrt(test_l)
+        else:  # Classification
+            train_accur = self.evaluate(self._train_X[:-1], self._train_X[1:], batch_size,
+                                        inference=True)
+            test_accur = self.evaluate(self._test_X[:-1], self._test_X[1:], batch_size,
+                                       inference=True)
+
+        # Store training logs
+        epochs_list.append(epoch)
+        train_loss.append(train_l)
+        test_loss.append(test_l)
+        train_accuracy.append(train_accur)
+        test_accuracy.append(test_accur)
+
+        # Print training logs
+        print(("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - " +
+               "Test Accuracy: %.4f") % (epoch, train_l, test_l, train_accur, test_accur))
+
+        if plot:
+            self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
+                                     test_accuracy)
+
+    def prepare_character_data(self, X):
+        # Encode data to OneHot
+        data_size = len(X)
+        unique_chars = list(set(X))
+        K = len(unique_chars)
+
+        self._char_to_idx = {ch: i for i, ch in enumerate(unique_chars)}
+        self._idx_to_char = {i: ch for i, ch in enumerate(unique_chars)}
+
+        train_size = int(data_size * self._train_size)
+        test_size = data_size - train_size
+
+        self._train_X = np.zeros((train_size, K), dtype=conf.dtype)
+        for i, d in enumerate(X[:train_size]):
+            self._train_X[i, self._char_to_idx[d]] = 1
+
+        self._test_X = np.zeros((test_size, K), dtype=conf.dtype)
+        for i, d in enumerate(X[train_size:]):
+            self._test_X[i, self._char_to_idx[d]] = 1
+
+        for k, v in self._idx_to_char.items():
+            print("%d: %s" % (k, v))
+
+        print("Training Data:\n", self._train_X.shape)
+        print("Test Data:\n", self._test_X.shape)
+
+    def prepare_regression_data(self, X, y=None):
+        data_size = X.shape[0]
+        train_size = int(data_size * self._train_size)
+
+        self._train_X = X[:train_size]
+        self._test_X = X[train_size:]
+
+        if y is not None:
+            self._train_y = y[:train_size]
+            self._test_y = y[train_size:]
+
+        print("Training Data:\n", self._train_X.shape)
+        print("Test Data:\n", self._test_X.shape)
+
+    def generate_character_sequence(self, sample_length=100, temperature=1.0):
+        sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
+        while not (sampled_char.isalpha() and sampled_char.isupper()):
+            sampled_char = self._idx_to_char[np.random.randint(self._nn.num_classes)]
+
+        sampled_text = [sampled_char]
+        for n in range(sample_length):
+            # Set the previous sampled character (O_t-1) as current input (I_t) to the network,
+            # encodes as a OneHot vector
+            input = np.zeros((1, self._nn.num_classes), dtype=conf.dtype)
+            input[0, self._char_to_idx[sampled_char]] = 1
+
+            # Forward propagate throug the network
+            for layer in self._nn.layers:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                    if n == 0:
+                        # Reset hidden state at the beginning of sequence generation
+                        layer.reset_internal_states()
+                    input = np.copy(layer.forward(input, inference=True)[1])
+                    # Set previous hidden state (h_t-1) to current hidden state output (h_t)
+                    layer.reset_internal_states('previous_state')
+                else:
+                    probs = layer.forward(input, inference=True, temperature=temperature)
+                    sampled_idx = np.random.choice(range(self._nn.num_classes),
+                                                   p=probs.reshape(-1))
+                    sampled_char = self._idx_to_char[sampled_idx]
+                    sampled_text.append(sampled_char)
+
+        return sampled_text
+
+    def generate_cont_time_series_data(self, fig, axs, sample_length=500):
+        input = self._train_X[-1].reshape(1, -1)
+
+        sampled_data = [input]
+        for n in range(sample_length):
+            for layer in self._nn.layers:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                    input = np.copy(layer.forward(input, inference=True)[1])
+                    # Set previous hidden state (h_t-1) to current hidden state output (h_t)
+                    layer.reset_internal_states('previous_state')
+                else:
+                    input = layer.forward(input, inference=True)
+                    sampled_data.append(input)
+
+        sampled_data = np.concatenate(sampled_data, axis=0)
+        data = np.vstack((self._train_X, sampled_data))
+        train_size = self._train_X.shape[0]
+
+        colors = ['red', 'blue', 'green', 'purple', 'orange']
+        axs.clear()
+        for c in range(data.shape[-1]):
+            axs.plot(list(range(train_size)), data[:train_size, c], linestyle='-', color=colors[c])
+            axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
+                     color=colors[c])
+
+        plt.show(block=False)
+        plt.pause(0.01)
+
+        return
+
+    def train_recurrent(self, batch_size=256, epochs=1000, sample_length=100, temperature=1.0,
+                        plot=None, fit_test_data=False, log_freq=100):
+        start_time = time.time()
+
+        if plot is not None:
+            fig, axs = plt.subplots(2, sharey=False, sharex=True)
+            fig.suptitle(plot, fontsize=20)
+        else:
+            fig = axs = None
+
+        if fit_test_data:
+            fig_2, axs_2 = plt.subplots(1, sharey=False, sharex=False)
+            fig_3, axs_3 = plt.subplots(1, sharey=False, sharex=False)
+
+        epochs_list = list()
+        train_loss = list()
+        test_loss = list()
+        train_accuracy = list()
+        test_accuracy = list()
+        num_batches = int(np.ceil((self._train_X.shape[0] - 1) / batch_size))
+
+        init_train_l = self.batch_loss(self._train_X[:-1], self._train_X[1:], batch_size,
+                                       inference=False, log_freq=log_freq)
+        self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
+                       test_loss, train_accuracy, test_accuracy, log_freq)
+
+        for e in range(epochs):
+            for i in range(num_batches):
+                if log_freq < 0:
+                    print("Epoch: %d -- Batch: %d" % (e, i))
+                startX = int(batch_size * i)
+                startY = startX + 1
+                if i == num_batches - 1:
+                    endX = self._train_X.shape[0] - 1
+                    endY = endX + 1
+                else:
+                    endX = startX + batch_size
+                    endY = endX + 1
+
+                train_l = self.loss(self._train_X[startX:endX], self._train_X[startY:endY],
+                                    inference=False)
+                loss_grad = self.loss_gradient(self._train_X[startX:endX],
+                                               self._train_X[startY:endY])
+                _ = self._nn.backward(loss_grad, self._lambda)
+                self.update_network(e + 1)
+
+            if e % 5 == 0:
+                if self._regression:
+                    if fit_test_data:
+                        # Generate continuous time series data starting from the last training
+                        # data point
+                        sampled_text = \
+                            self.generate_cont_time_series_data(fig_2, axs_2, sample_length)
+                else:
+                    # Sample from the model by setting an initial seed
+                    sampled_text = self.generate_character_sequence(sample_length, temperature)
+                    print('\n', ''.join(sampled_text), '\n')
+
+            if (e + 1) % np.abs(log_freq) == 0:
+                self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
+                               train_loss, test_loss, train_accuracy, test_accuracy, log_freq)
+                if self._regression and fit_test_data:
+                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, inference=True)
+
+            # End of an epoch - Reset RNN layers
+            self.reset_recurrent_layers()
+
+        training_logs_dict = OrderedDict()
+        training_logs_dict['epochs'] = epochs_list
+        training_logs_dict['train_loss'] = train_loss
+
+        end_time = time.time()
+        print("\nTraining Time: %.2f(s)" % (end_time - start_time))
+
+        return training_logs_dict

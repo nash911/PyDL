@@ -12,10 +12,11 @@ from sklearn import datasets
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import SGD
-from pydl.training.training import Momentum
-from pydl.training.training import RMSprop
-from pydl.training.training import Adam
+from pydl.training.sgd import SGD
+from pydl.training.momentum import Momentum
+from pydl.training.rmsprop import RMSprop
+from pydl.training.adam import Adam
+
 
 def main():
     breast_cancer = datasets.load_breast_cancer()
@@ -41,12 +42,12 @@ def main():
 
     # SGD
     sgd = SGD(nn_a, step_size=1e-3, reg_lambda=1e-2)
-    sgd.train(X, y_onehot, normalize='mean', epochs=10000, y_onehot=False, plot='SGD')
+    sgd.train(X, y_onehot, normalize='mean', epochs=5000, y_onehot=False, plot='SGD')
 
     # RMSprop
     nn_a.reinitialize_network()
     rms = RMSprop(nn_a, step_size=1e-3, beta=0.9, reg_lambda=1e-2)
-    rms.train(X, y, normalize='mean', epochs=10000, y_onehot=False, plot='RMSprop')
+    rms.train(X, y, normalize='mean', epochs=5000, y_onehot=False, plot='RMSprop')
 
     # Sigmoid Cross Entropy - Single Output Neurons
     l1 = FC(X, num_neurons=int(X.shape[-1] * 2), bias=True, weight_scale=1.0, xavier=True,
@@ -59,12 +60,12 @@ def main():
 
     # Momentum
     momentum = Momentum(nn_b, step_size=1e-3, mu=0.5, reg_lambda=1e-2)
-    momentum.train(X, y, normalize='mean', epochs=10000, y_onehot=False, plot='Momentum')
+    momentum.train(X, y, normalize='mean', epochs=5000, y_onehot=False, plot='Momentum')
 
     # Adam
     nn_b.reinitialize_network()
     adam = Adam(nn_b, step_size=1e-3, beta_1=0.9, beta_2=0.999, reg_lambda=1e-2)
-    adam.train(X, y_onehot, normalize='mean', epochs=10000, y_onehot=False, plot='Adam')
+    adam.train(X, y_onehot, normalize='mean', epochs=5000, y_onehot=False, plot='Adam')
 
     input("Press Enter to continue...")
 

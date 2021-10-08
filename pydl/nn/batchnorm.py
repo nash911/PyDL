@@ -13,8 +13,7 @@ from pydl import conf
 
 
 class BatchNorm(object):
-    """The Batch Norm Class
-    """
+    """The Batch Norm Class."""
 
     def __init__(self, gamma=None, beta=None, feature_size=None, name=None):
         if gamma is not None:
@@ -73,7 +72,6 @@ class BatchNorm(object):
         self._gamma = np.ones(feature_size, dtype=conf.dtype)
         self._beta = np.zeros(feature_size, dtype=conf.dtype)
 
-
     def forward(self, X):
         self._std_eps = np.sqrt(np.var(X, axis=0) + 1e-32)
         self._X_norm = (X - np.mean(X, axis=0)) / self._std_eps
@@ -113,7 +111,7 @@ class BatchNorm(object):
         x_norm_grad = self._gamma * inp_grad
         self._out_grad = ((M * x_norm_grad) - (np.sum(x_norm_grad, axis=0, keepdims=True)) -
                           (self._X_norm * np.sum(x_norm_grad * self._X_norm, axis=0,
-                                                  keepdims=True))) / (M * self._std_eps)
+                                                 keepdims=True))) / (M * self._std_eps)
 
         self._X_norm = None
         self._std_eps = None

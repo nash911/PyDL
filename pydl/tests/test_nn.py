@@ -10,7 +10,6 @@
 import unittest
 import numpy as np
 import numpy.testing as npt
-import time
 from collections import OrderedDict
 
 from pydl.nn.layers import FC

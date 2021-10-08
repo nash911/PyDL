@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import Momentum
+from pydl.training.momentum import Momentum
 from pydl import conf
 
 

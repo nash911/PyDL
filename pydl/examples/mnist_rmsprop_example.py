@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 
 from pydl.nn.layers import FC
 from pydl.nn.nn import NN
-from pydl.training.training import RMSprop
+from pydl.training.rmsprop import RMSprop
 from pydl import conf
+
 
 def main():
     mnist = fetch_openml('mnist_784')
@@ -53,7 +54,8 @@ def main():
     layers = [l1, l2, l3, l4, l5, l6]
 
     nn = NN(X, layers)
-    rms = RMSprop(nn, step_size=1e-4, beta=0.999, reg_lambda=1e-1, train_size=60000, test_size=10000)
+    rms = RMSprop(nn, step_size=1e-4, beta=0.999, reg_lambda=1e-1, train_size=60000,
+                  test_size=10000)
     rms.train(X, y, normalize='pca', dims=0.97, shuffle=False, epochs=10000, plot='MNIST - RMSprop',
               log_freq=1)
 

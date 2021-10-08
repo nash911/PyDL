@@ -16,7 +16,7 @@ from pydl.nn.conv import Conv
 from pydl.nn.pool import Pool
 from pydl.nn.residual_block import ResidualBlock
 from pydl.nn.nn import NN
-from pydl.training.training import Momentum
+from pydl.training.momentum import Momentum
 
 
 def get_data(file_path):

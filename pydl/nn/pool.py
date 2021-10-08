@@ -138,7 +138,6 @@ class Pool(Layer):
         self._out_size = np.prod(self._out_shape[1:])
 
     def calculate_unroll_indices(self):
-        inp_d = self._inp_shape[0]
         inp_h = self._inp_shape[1]
         inp_w = self._inp_shape[2]
         ker_h = self._receptive_field[0]
@@ -254,9 +253,6 @@ class Pool(Layer):
         return pooling_out.reshape(-1, *self.shape[1:])
 
     def forward_avg(self, padded_inputs):
-        ker_h = self._receptive_field[0]
-        ker_w = self._receptive_field[1]
-
         # Unroll input volume to shape: (batch, out_rows*out_cols, filter_size[hxw])
         unrolled_inputs = padded_inputs[:, :, self._row_inds, self._col_inds]
 
@@ -268,7 +264,6 @@ class Pool(Layer):
     def forward(self, inputs, inference=None, mask=None, temperature=1.0):
         # Zero-pad input volume based on the setting
         if self._padding is not None:
-            pad = self._padding
             padded_inputs = np.pad(inputs, ((0, 0), (0, 0), *self._padding), 'constant',
                                    constant_values=-np.inf if self._pool == 'MAX' else 0)
         else:
