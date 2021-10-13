@@ -14,7 +14,7 @@ from pydl.training.recurrent_training import RecurrentTraining
 
 
 class RMSprop(PlainTraining, RecurrentTraining):
-    def __init__(self, nn=None, step_size=1e-2, beta=0.999, reg_lambda=1e-4, train_size=70,
+    def __init__(self, nn=None, step_size=1e-2, beta=0.999, reg_lambda=0, train_size=70,
                  test_size=30, activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
@@ -43,11 +43,9 @@ class RMSprop(PlainTraining, RecurrentTraining):
         return training_logs_dict
 
     def train_recurrent(self, X, y=None, batch_size=256, epochs=10000, sample_length=100,
-                        temperature=1.0, plot=None, fit_test_data=False, log_freq=100):
-        if self._regression:
-            self.prepare_regression_data(X)
-        else:
-            self.prepare_character_data(X)
+                        normalize=False, temperature=1.0, plot=None, fit_test_data=False,
+                        log_freq=100):
+        self.prepare_sequence_data(X, y, normalize)
 
         self.init_rmsprop_cache()
 

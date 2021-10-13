@@ -246,9 +246,12 @@ class RNN(Layer):
 
     def forward(self, inputs, inference=False, mask=None, temperature=1.0):
         if len(inputs.shape) > 2:  # Preceeding layer is a Convolution/Pooling layer or 3D inputs
-            # Unroll inputs
-            batch_size = inputs.shape[0]
-            inputs = inputs.reshape(batch_size, -1)
+            try:
+                inputs = inputs.squeeze(axis=0)
+            except ValueError:
+                # Unroll inputs
+                batch_size = inputs.shape[0]
+                inputs = inputs.reshape(batch_size, -1)
 
         for t, inp in enumerate(inputs, start=1):
             # Store inputs in dict for backprop

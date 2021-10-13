@@ -23,7 +23,7 @@ class RecurrentTraining(Training):
         name (str): Name of the training algorithm.
     """
 
-    def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+    def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
                  activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
@@ -62,37 +62,7 @@ class RecurrentTraining(Training):
         plt.show(block=False)
         plt.pause(0.01)
 
-    def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
-                  test_loss, train_accuracy, test_accuracy, log_freq=1):
-        test_l = self.batch_loss(self._test_X[:-1], self._test_X[1:], batch_size, inference=True,
-                                 log_freq=log_freq)
-        if self._regression:
-            train_l = self.batch_loss(self._train_X[:-1], self._train_X[1:], batch_size,
-                                      inference=True, log_freq=log_freq)
-            train_accur = np.sqrt(train_l)
-            test_accur = np.sqrt(test_l)
-        else:  # Classification
-            train_accur = self.evaluate(self._train_X[:-1], self._train_X[1:], batch_size,
-                                        inference=True)
-            test_accur = self.evaluate(self._test_X[:-1], self._test_X[1:], batch_size,
-                                       inference=True)
-
-        # Store training logs
-        epochs_list.append(epoch)
-        train_loss.append(train_l)
-        test_loss.append(test_l)
-        train_accuracy.append(train_accur)
-        test_accuracy.append(test_accur)
-
-        # Print training logs
-        print(("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - " +
-               "Test Accuracy: %.4f") % (epoch, train_l, test_l, train_accur, test_accur))
-
-        if plot:
-            self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
-                                     test_accuracy)
-
-    def prepare_character_data(self, X):
+    def prepare_character_data(self, X, y=None):
         # Encode data to OneHot
         data_size = len(X)
         unique_chars = list(set(X))
@@ -101,7 +71,8 @@ class RecurrentTraining(Training):
         self._char_to_idx = {ch: i for i, ch in enumerate(unique_chars)}
         self._idx_to_char = {i: ch for i, ch in enumerate(unique_chars)}
 
-        train_size = int(data_size * self._train_size)
+        train_size = int(data_size * self._train_size) if self._train_size <= 1.0 else \
+            self._train_size
         test_size = data_size - train_size
 
         self._train_X = np.zeros((train_size, K), dtype=conf.dtype)
@@ -115,19 +86,45 @@ class RecurrentTraining(Training):
         for k, v in self._idx_to_char.items():
             print("%d: %s" % (k, v))
 
-        print("Training Data:\n", self._train_X.shape)
-        print("Test Data:\n", self._test_X.shape)
-
-    def prepare_regression_data(self, X, y=None):
-        data_size = X.shape[0]
-        train_size = int(data_size * self._train_size)
-
-        self._train_X = X[:train_size]
-        self._test_X = X[train_size:]
+    def prepare_sequence_data(self, X, y=None, normalize=False):
+        try:
+            data_size = X.shape[0]
+            train_size = int(data_size * self._train_size) if self._train_size <= 1.0 else \
+                self._train_size
+        except AttributeError:
+            # Character data
+            self.prepare_character_data(X)
 
         if y is not None:
+            self._train_X = X[:train_size]
+            self._test_X = X[train_size:]
+
             self._train_y = y[:train_size]
             self._test_y = y[train_size:]
+
+            if self._binary_classification:
+                if len(self._train_y.shape) == 1:
+                    self._train_y = np.reshape(self._train_y, newshape=(-1, 1))
+                    self._test_y = np.reshape(self._test_y, newshape=(-1, 1))
+                elif len(self._train_y.shape) == 2 and self._train_y.shape[1] > 1:
+                    self._train_y = np.reshape(np.argmax(self._train_y, axis=-1), newshape=(-1, 1))
+                    self._test_y = np.reshape(np.argmax(self._test_y, axis=-1), newshape=(-1, 1))
+
+            if normalize:
+                # Mean Normalize data
+                mean, std, self._train_X = self.mean_normalize(self._train_X)
+                _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+        else:
+            if self._regression:
+                self._train_X = X[:train_size]
+                self._test_X = X[train_size:]
+
+                if normalize:
+                    # Mean Normalize data
+                    mean, std, self._train_X = self.mean_normalize(self._train_X)
+                    _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+            else:
+                self.prepare_character_data(X)
 
         print("Training Data:\n", self._train_X.shape)
         print("Test Data:\n", self._test_X.shape)
@@ -206,15 +203,22 @@ class RecurrentTraining(Training):
             fig_2, axs_2 = plt.subplots(1, sharey=False, sharex=False)
             fig_3, axs_3 = plt.subplots(1, sharey=False, sharex=False)
 
+        if self._train_y is None or self._test_y is None:
+            train_X = self._train_X[:-1]
+            train_y = self._train_X[1:]
+        else:
+            train_X = self._train_X
+            train_y = self._train_y
+
         epochs_list = list()
         train_loss = list()
         test_loss = list()
         train_accuracy = list()
         test_accuracy = list()
-        num_batches = int(np.ceil((self._train_X.shape[0] - 1) / batch_size))
+        num_batches = int(np.ceil(train_X.shape[0] / batch_size))
 
-        init_train_l = self.batch_loss(self._train_X[:-1], self._train_X[1:], batch_size,
-                                       inference=False, log_freq=log_freq)
+        init_train_l = self.batch_loss(train_X, train_y, batch_size, inference=False,
+                                       hidden_state='previous_state', log_freq=log_freq)
         self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
                        test_loss, train_accuracy, test_accuracy, log_freq)
 
@@ -222,19 +226,36 @@ class RecurrentTraining(Training):
             for i in range(num_batches):
                 if log_freq < 0:
                     print("Epoch: %d -- Batch: %d" % (e, i))
-                startX = int(batch_size * i)
-                startY = startX + 1
-                if i == num_batches - 1:
-                    endX = self._train_X.shape[0] - 1
-                    endY = endX + 1
-                else:
-                    endX = startX + batch_size
-                    endY = endX + 1
 
-                train_l = self.loss(self._train_X[startX:endX], self._train_X[startY:endY],
-                                    inference=False)
-                loss_grad = self.loss_gradient(self._train_X[startX:endX],
-                                               self._train_X[startY:endY])
+                if self._train_y is None:
+                    # Case where temporal dependency exists in the full batch on data
+                    startX = int(batch_size * i)
+                    startY = startX + 1
+                    if i == num_batches - 1:
+                        endX = self._train_X.shape[0] - 1
+                        endY = endX + 1
+                    else:
+                        endX = startX + batch_size
+                        endY = endX + 1
+
+                    train_l = self.loss(self._train_X[startX:endX], self._train_X[startY:endY],
+                                        inference=False)
+                    loss_grad = self.loss_gradient(self._train_X[startX:endX],
+                                                   self._train_X[startY:endY])
+                else:
+                    # Case where temporal dependency does not exist between individual data points,
+                    # but only within a single data popint (eg: Image Captioning)
+                    start = int(batch_size * i)
+                    if i == num_batches - 1:
+                        end = self._train_X.shape[0]
+                    else:
+                        end = start + batch_size
+
+                    train_l = self.loss(self._train_X[start:end], self._train_y[start:end],
+                                        inference=False)
+                    loss_grad = \
+                        self.loss_gradient(self._train_X[start:end], self._train_y[start:end])
+
                 _ = self._nn.backward(loss_grad, self._lambda)
                 self.update_network(e + 1)
 
@@ -246,9 +267,10 @@ class RecurrentTraining(Training):
                         sampled_text = \
                             self.generate_cont_time_series_data(fig_2, axs_2, sample_length)
                 else:
-                    # Sample from the model by setting an initial seed
-                    sampled_text = self.generate_character_sequence(sample_length, temperature)
-                    print('\n', ''.join(sampled_text), '\n')
+                    if self._train_y is None:
+                        # Sample from the model by setting an initial seed
+                        sampled_text = self.generate_character_sequence(sample_length, temperature)
+                        print('\n', ''.join(sampled_text), '\n')
 
             if (e + 1) % np.abs(log_freq) == 0:
                 self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
@@ -262,6 +284,9 @@ class RecurrentTraining(Training):
         training_logs_dict = OrderedDict()
         training_logs_dict['epochs'] = epochs_list
         training_logs_dict['train_loss'] = train_loss
+        training_logs_dict['test_loss'] = test_loss
+        training_logs_dict['train_accuracy'] = train_accuracy
+        training_logs_dict['test_accuracy'] = test_accuracy
 
         end_time = time.time()
         print("\nTraining Time: %.2f(s)" % (end_time - start_time))

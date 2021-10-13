@@ -22,39 +22,11 @@ class PlainTraining(Training):
         name (str): Name of the training algorithm.
     """
 
-    def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+    def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
                  activatin_type=None, regression=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
                          name=name)
-
-    def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
-                  test_loss, train_accuracy, test_accuracy, log_freq=1):
-        test_l = self.batch_loss(self._test_X, self._test_y, batch_size, inference=True,
-                                 log_freq=log_freq)
-        if self._regression:
-            train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=True,
-                                      log_freq=log_freq)
-            train_accur = np.sqrt(train_l)
-            test_accur = np.sqrt(test_l)
-        else:  # Classification
-            train_accur = self.evaluate(self._train_X, self._train_y, batch_size, inference=True)
-            test_accur = self.evaluate(self._test_X, self._test_y, batch_size, inference=True)
-
-        # Store training logs
-        epochs_list.append(epoch)
-        train_loss.append(train_l)
-        test_loss.append(test_l)
-        train_accuracy.append(train_accur)
-        test_accuracy.append(test_accur)
-
-        # Print training logs
-        print(("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - " +
-               "Test Accuracy: %.4f") % (epoch, train_l, test_l, train_accur, test_accur))
-
-        if plot:
-            self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
-                                     test_accuracy)
 
     def prepare_data(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256,
                      y_onehot=False):

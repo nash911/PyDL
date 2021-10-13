@@ -22,7 +22,7 @@ class Training(ABC):
         name (str): Name of the training algorithm.
     """
 
-    def __init__(self, nn=None, step_size=1e-2, reg_lambda=1e-4, train_size=70, test_size=30,
+    def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
                  activatin_type=None, regression=False, name=None):
         self._nn = nn
         self._step_size = step_size
@@ -328,7 +328,7 @@ class Training(ABC):
         self._class_prob = None
         return loss_grad / y.shape[0]
 
-    def batch_loss(self, X, y, batch_size=None, inference=True, log_freq=1):
+    def batch_loss(self, X, y, batch_size=None, inference=True, hidden_state=None, log_freq=1):
         if batch_size is None:
             batch_size = X.shape[0]
         num_batches = int(np.ceil(X.shape[0] / batch_size))
@@ -346,11 +346,11 @@ class Training(ABC):
             else:
                 end = start + batch_size
             batch_l.append(self.loss(X[start:end], y[start:end], inference))
-            self.reset_recurrent_layers(hidden_state='previous_state')
+            self.reset_recurrent_layers(hidden_state=hidden_state)
 
         return np.mean(batch_l)
 
-    def evaluate(self, X, y, batch_size=None, inference=True):
+    def evaluate(self, X, y, batch_size=None, inference=True, hidden_state=None):
         if batch_size is None:
             batch_size = X.shape[0]
         num_batches = int(np.ceil(X.shape[0] / batch_size))
@@ -366,7 +366,7 @@ class Training(ABC):
             else:
                 end = start + batch_size
             test_prob.append(self._nn.forward(X[start:end], inference))
-            self.reset_recurrent_layers(hidden_state='previous_state')
+            self.reset_recurrent_layers(hidden_state=hidden_state)
 
         test_prob = np.vstack(test_prob)
 
@@ -402,3 +402,49 @@ class Training(ABC):
 
         plt.show(block=False)
         plt.pause(0.01)
+
+    def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
+                  test_loss, train_accuracy, test_accuracy, log_freq=1):
+        if self._train_y is None or self._test_y is None:
+            train_X = self._train_X[:-1]
+            train_y = self._train_X[1:]
+
+            test_X = self._test_X[:-1]
+            test_y = self._test_X[1:]
+
+            # Set hidden state of a recurrent unit to the ...
+            hidden_state = 'previous_state'
+        else:
+            train_X = self._train_X
+            train_y = self._train_y
+
+            test_X = self._test_X
+            test_y = self._test_y
+
+            hidden_state = None
+
+        test_l = self.batch_loss(test_X, test_y, batch_size, inference=True,
+                                 hidden_state=hidden_state, log_freq=log_freq)
+        if self._regression:
+            train_l = self.batch_loss(train_X, train_y, batch_size, inference=True,
+                                      hidden_state=hidden_state, log_freq=log_freq)
+            train_accur = np.sqrt(train_l)
+            test_accur = np.sqrt(test_l)
+        else:  # Classification
+            train_accur = self.evaluate(train_X, train_y, batch_size, inference=True)
+            test_accur = self.evaluate(test_X, test_y, batch_size, inference=True)
+
+        # Store training logs
+        epochs_list.append(epoch)
+        train_loss.append(train_l)
+        test_loss.append(test_l)
+        train_accuracy.append(train_accur)
+        test_accuracy.append(test_accur)
+
+        # Print training logs
+        print(("Epoch-%d - Training Loss: %.4f - Test Loss: %.4f - Train Accuracy: %.4f - " +
+               "Test Accuracy: %.4f") % (epoch, train_l, test_l, train_accur, test_accur))
+
+        if plot:
+            self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
+                                     test_accuracy)
