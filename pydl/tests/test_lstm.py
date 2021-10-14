@@ -109,28 +109,32 @@ class TestLSTM(unittest.TestCase):
 
         # Combinatorial Test Cases
         # ------------------------
-        sequence_length = [1, 2, 3, 11]
-        feature_size = [1, 2, 3, 11]
-        num_neurons = [1, 2, 3, 11]
+        sequence_length = [1, 2, 3, 4]
+        reduce_size = [0, 1]
+        feature_size = [1, 2, 3, 4]
+        num_neurons = [1, 2, 3, 4]
         bias = [10, 'rand']
         one_hot = [True, False]
         scale = [1e-2, 1e+0]
         unit_inp_grad = [True, False]
-        dropout = [False]
+        dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
         repeat = list(range(1))
 
-        for seq_len, feat, neur, b, oh, scl, unit, dout, a_type, r in \
-            list(itertools.product(sequence_length, feature_size, num_neurons, bias, one_hot, scale,
-                                   unit_inp_grad, dropout, architecture_type, repeat)):
+        for seq_len, r_size, feat, neur, b, oh, scl, unit, dout, a_type, r in \
+            list(itertools.product(sequence_length, reduce_size, feature_size, num_neurons, bias,
+                                   one_hot, scale, unit_inp_grad, dropout, architecture_type,
+                                   repeat)):
+
+            batch_size = seq_len - (r_size if seq_len > 1 else 0)
 
             # Initialize inputs
             if oh:
-                X = np.zeros((seq_len, feat), dtype=conf.dtype)
-                rnd_idx = np.random.randint(feat, size=seq_len)
-                X[range(seq_len), rnd_idx] = 1
+                X = np.zeros((batch_size, feat), dtype=conf.dtype)
+                rnd_idx = np.random.randint(feat, size=batch_size)
+                X[range(batch_size), rnd_idx] = 1
             else:
-                X = np.random.uniform(-scl, scl, (seq_len, feat))
+                X = np.random.uniform(-scl, scl, (batch_size, feat))
 
             # Initialize weights and bias
             w = np.random.rand((neur + feat), (4 * neur)) * scl
@@ -142,17 +146,17 @@ class TestLSTM(unittest.TestCase):
             # Initialize input gradients
             inp_grad = OrderedDict()
             if a_type == 'many_to_many':
-                for s in range(1, seq_len + 1):
+                for s in range(1, batch_size + 1):
                     inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                         np.random.uniform(-1, 1, (1, neur))
             else:
-                inp_grad[seq_len] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+                inp_grad[batch_size] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                     np.random.uniform(-1, 1, (1, neur))
 
             # Set dropout mask
             if dout:
                 p = np.random.rand()
-                mask = np.array(np.random.rand(seq_len, neur) < p, dtype=conf.dtype)
+                mask = np.array(np.random.rand(batch_size, neur) < p, dtype=conf.dtype)
             else:
                 p = None
                 mask = None

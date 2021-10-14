@@ -14,7 +14,7 @@ from collections import OrderedDict
 from pydl.nn.layers import Layer
 from pydl.nn.activations import Sigmoid
 from pydl.nn.activations import Tanh
-# from pydl.nn.dropout import Dropout
+from pydl.nn.dropout import Dropout
 from pydl import conf
 
 
@@ -90,9 +90,12 @@ class LSTM(Layer):
 
         self.reset_gradients()
 
-        # if dropout is not None and dropout < 1.0:
-        #     self._dropout = [Dropout(p=dropout, activation_fn='Sigmoid') for _ in
-        #                      range(self._seq_len + 1)]
+        if dropout is not None and dropout < 1.0:
+            if self._architecture_type == 'many_to_many':
+                self._dropout = \
+                    [Dropout(p=dropout, activation_fn='Linear') for _ in range(self._seq_len + 1)]
+            else:  # Many-to-one
+                self._dropout = Dropout(p=dropout, activation_fn='Linear')
 
     # Getters
     # -------
@@ -214,13 +217,31 @@ class LSTM(Layer):
             self._hidden_state[t] = \
                 o_gate * self._cell_state_activation_fn[t].forward(self._cell_state[t])
 
-            self._output[t] = self._hidden_state[t]
+            # Dropout
+            if self._dropout is not None:
+                if not inference:  # Training step
+                    if self.dropout_mask is None:
+                        drop_mask = None if mask is None else mask[t - 1]
+                    else:
+                        drop_mask = self.dropout_mask[t - 1]
+
+                    # Apply Dropout Mask
+                    try:  # Case: Many-to-many
+                        self._output[t] = self._dropout[t].forward(self._hidden_state[t], drop_mask)
+                    except TypeError:  # Case: Many-to-one
+                        if t == inputs.shape[0]:
+                            self._output[t] = \
+                                self._dropout.forward(self._hidden_state[t], drop_mask)
+                else:  # Inference
+                    # Inverse Dropout - So the gradients just flow through
+                    self._output[t] = self._hidden_state[t]
+            else:
+                self._output[t] = self._hidden_state[t]
 
         if self._architecture_type == 'many_to_one':
             # Pass through the output of the final sequence only
             single_out_dict = OrderedDict()
-            single_out_dict[list(self._hidden_state.keys())[-1]] = \
-                list(self._hidden_state.values())[-1]
+            single_out_dict[list(self._output.keys())[-1]] = list(self._output.values())[-1]
             return single_out_dict
         else:
             return self._output
@@ -233,16 +254,26 @@ class LSTM(Layer):
             if self._architecture_type == 'many_to_one':
                 if t <= list(inp_grad.keys())[-1]:
                     if t == list(inp_grad.keys())[-1]:
-                        grad = hidden_grad + inp_grad[t]
+                        # Backpropagating through Dropout
+                        if self._dropout is not None:
+                            drop_grad = self._dropout.backward(inp_grad[t])
+                        else:
+                            drop_grad = inp_grad[t]
+                        grad = hidden_grad + drop_grad
                     else:
                         grad = hidden_grad
                         if len(grad.shape) == 1:
                             grad = np.expand_dims(grad, axis=0)
                 else:
                     continue
-            else:
+            else:  # Many-to-one
                 try:
-                    grad = hidden_grad + inp_grad[t]
+                    # Backpropagating through Dropout
+                    if self._dropout is not None:
+                        drop_grad = self._dropout[t].backward(inp_grad[t])
+                    else:
+                        drop_grad = inp_grad[t]
+                    grad = hidden_grad + drop_grad
                 except KeyError:
                     continue
 

@@ -1081,18 +1081,20 @@ class TestNN(unittest.TestCase):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
-            seq_len = 100
+            seq_len = 10
             batch_size = seq_len - r_size
+            inp_feat_size = 25
             num_neurons_rnn = 15
-            X = np.random.uniform(-1, 1, (batch_size, 25)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
             b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 2
-            w_2 = np.random.randn(b_1.shape[-1], 20) * 0.01
-            b_2 = np.random.uniform(-1, 1, (20)) * 0.01
+            num_neurons_fc = 20
+            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1110,19 +1112,21 @@ class TestNN(unittest.TestCase):
             # Case-2- OneHot Inputs
             # ---------------------
             # Layer 1
-            seq_len = 101
+            seq_len = 11
             batch_size = seq_len - r_size
+            inp_feat_size = 13
             num_neurons_rnn = 24
-            X = np.zeros((batch_size, 13), dtype=conf.dtype)
-            X[range(batch_size), np.random.randint(13, size=batch_size)] = 1
+            X = np.zeros((batch_size, inp_feat_size), dtype=conf.dtype)
+            X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
             b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 2
-            w_2 = np.random.randn(b_1.shape[-1], 10) * 0.01
-            b_2 = np.random.uniform(-1, 1, (10)) * 0.01
+            num_neurons_fc = 10
+            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1140,7 +1144,7 @@ class TestNN(unittest.TestCase):
             # Case-3 - Sandwitched Layers - FC - RNN - FC
             # -------------------------------------------
             # Layer 1
-            seq_len = 99
+            seq_len = 9
             batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_fc = 30
@@ -1156,8 +1160,9 @@ class TestNN(unittest.TestCase):
             b_2 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
 
             # Layer 3
-            w_3 = np.random.randn(b_2.shape[-1], 20) * 0.01
-            b_3 = np.random.uniform(-1, 1, (20)) * 0.01
+            num_neurons_fc_out = 20
+            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * 0.01
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1180,7 +1185,7 @@ class TestNN(unittest.TestCase):
             # Case-4 - Sandwitched Layers - RNN - RNN - FC
             # --------------------------------------------
             # Layer 1
-            seq_len = 90
+            seq_len = 8
             batch_size = seq_len - r_size
             inp_feat_size = 17
             num_neurons_rnn_1 = 11
@@ -1198,8 +1203,9 @@ class TestNN(unittest.TestCase):
             b_2 = np.random.uniform(-1, 1, (num_neurons_rnn_2)) * 0.01
 
             # Layer 3
-            w_3 = np.random.randn(b_2.shape[-1], 24) * 0.01
-            b_3 = np.random.uniform(-1, 1, (24)) * 0.01
+            num_neurons_fc_out = 24
+            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * 0.01
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
 
             # RNN Architecture
             # ----------------
@@ -1244,28 +1250,32 @@ class TestNN(unittest.TestCase):
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
         architecture_type = ['many_to_many', 'many_to_one']
-        for a_type in architecture_type:
+        reduce_size = [0, 5]
+
+        for a_type, r_size in list(itertools.product(architecture_type, reduce_size)):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
-            seq_len = 100
+            seq_len = 10
+            batch_size = seq_len - r_size
+            inp_feat_size = 25
             num_neurons_lstm = 15
-            X = np.random.uniform(-1, 1, (seq_len, 25)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
             w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
-            # b_1 = np.random.rand(4 * num_neurons_lstm) * 0.01
             b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
 
             # Layer 2
-            w_2 = np.random.randn(num_neurons_lstm, 20) * 0.01
-            b_2 = np.random.uniform(-1, 1, (20)) * 0.01
+            num_neurons_fc = 16
+            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
 
             # LSTM Architecture
             # -----------------
-            dp1 = None#np.random.rand()
+            dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
                       name='LSTM-1')
-            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
-            # l1.dropout_mask = mask_l1
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
@@ -1275,24 +1285,27 @@ class TestNN(unittest.TestCase):
             # Case-2- OneHot Inputs
             # ---------------------
             # Layer 1
-            seq_len = 101
+            seq_len = 11
+            batch_size = seq_len - r_size
+            inp_feat_size = 13
             num_neurons_lstm = 24
-            X = np.zeros((seq_len, 13), dtype=conf.dtype)
-            X[range(seq_len), np.random.randint(13, size=seq_len)] = 1
+            X = np.zeros((batch_size, inp_feat_size), dtype=conf.dtype)
+            X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
             w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
             b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
 
             # Layer 2
-            w_2 = np.random.randn(num_neurons_lstm, 10) * 0.01
-            b_2 = np.random.uniform(-1, 1, (10)) * 0.01
+            num_neurons_fc = 10
+            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
 
             # LSTM Architecture
             # -----------------
-            dp1 = None#np.random.rand()
+            dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
                       name='LSTM-1')
-            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
-            # l1.dropout_mask = mask_l1
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
@@ -1302,7 +1315,8 @@ class TestNN(unittest.TestCase):
             # Case-3 - Sandwitched Layers - FC - LSTM - FC
             # --------------------------------------------
             # Layer 1
-            batch_size = seq_len = 99
+            seq_len = 9
+            batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_fc = 30
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
@@ -1316,21 +1330,22 @@ class TestNN(unittest.TestCase):
             b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
 
             # Layer 3
-            w_3 = np.random.randn(num_neurons_lstm, 20) * 0.01
-            b_3 = np.random.uniform(-1, 1, (20)) * 0.01
+            num_neurons_fc_out = 20
+            w_3 = np.random.randn(num_neurons_lstm, num_neurons_fc_out) * 0.01
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
 
             # LSTM Architecture
             # -----------------
-            dp1 = None#np.random.rand()
+            dp1 = np.random.rand()
             l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU', dropout=dp1, name='FC-1')
-            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_fc) < dp1, dtype=conf.dtype)
-            # l1.dropout_mask = mask_l1
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_fc) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
 
-            dp2 = None #np.random.rand()
+            dp2 = np.random.rand()
             l2 = LSTM(l1, num_neurons_lstm, w_2, b_2, seq_len, architecture_type=a_type,
                       dropout=dp2, name='LSTM-2')
-            # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
-            # l2.dropout_mask = mask_l2
+            mask_l2 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp2, dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 
@@ -1340,7 +1355,8 @@ class TestNN(unittest.TestCase):
             # Case-4 - Sandwitched Layers - LSTM - LSTM - FC
             # ----------------------------------------------
             # Layer 1
-            batch_size = seq_len = 90
+            seq_len = 8
+            batch_size = seq_len - r_size
             inp_feat_size = 17
             num_neurons_lstm_1 = 11
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
@@ -1355,22 +1371,25 @@ class TestNN(unittest.TestCase):
             b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_2)) * 0.01
 
             # Layer 3
-            w_3 = np.random.randn(num_neurons_lstm_2, 24) * 0.01
-            b_3 = np.random.uniform(-1, 1, (24)) * 0.01
+            num_neurons_fc_out = 24
+            w_3 = np.random.randn(num_neurons_lstm_2, num_neurons_fc_out) * 0.01
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
 
             # LSTM Architecture
             # -----------------
-            dp1 = None #np.random.rand()
+            dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm_1, w_1, b_1, seq_len, architecture_type='many_to_many',
                       dropout=dp1, name='LSTM-1')
-            # mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
-            # l1.dropout_mask = mask_l1
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm_1) < dp1,
+                               dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
 
-            dp2 = None #np.random.rand()
+            dp2 = np.random.rand()
             l2 = LSTM(l1, num_neurons_lstm_2, w_2, b_2, seq_len, architecture_type=a_type,
                       dropout=dp2, name='LSTM-2')
-            # mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
-            # l2.dropout_mask = mask_l2
+            mask_l2 = np.array(np.random.rand(batch_size, num_neurons_lstm_2) < dp2,
+                               dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 

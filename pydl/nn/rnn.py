@@ -99,7 +99,7 @@ class RNN(Layer):
             if self._architecture_type == 'many_to_many':
                 self._dropout = [Dropout(p=dropout, activation_fn=self._activation_fn[0].type)
                                  for _ in range(self._seq_len + 1)]
-            else:
+            else:  # Many-to-one
                 self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn[0].type)
 
     # Getters
@@ -289,7 +289,8 @@ class RNN(Layer):
                         except TypeError:  # Case: Many-to-one
                             self._output[t] = self._hidden_state[t] * self.dropout.p
                     else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
-                        pass  # Do nothing - Inverse Dropout
+                        # Inverse Dropout - So the gradients just flow through
+                        self._output[t] = self._hidden_state[t]
             else:
                 self._output[t] = self._hidden_state[t]
 
@@ -320,7 +321,7 @@ class RNN(Layer):
                             grad = np.expand_dims(grad, axis=0)
                 else:
                     continue
-            else:
+            else:  # Many-to-one
                 try:
                     # Backpropagating through Dropout
                     if self._dropout is not None:
