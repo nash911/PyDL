@@ -11,6 +11,7 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 from collections import OrderedDict
+import itertools
 
 from pydl.nn.layers import FC
 from pydl.nn.conv import Conv
@@ -1074,13 +1075,16 @@ class TestNN(unittest.TestCase):
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
         architecture_type = ['many_to_many', 'many_to_one']
-        for a_type in architecture_type:
+        reduce_size = [0, 3]
+
+        for a_type, r_size in list(itertools.product(architecture_type, reduce_size)):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
             seq_len = 100
+            batch_size = seq_len - r_size
             num_neurons_rnn = 15
-            X = np.random.uniform(-1, 1, (seq_len, 25)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, 25)) * 0.01
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
@@ -1095,7 +1099,7 @@ class TestNN(unittest.TestCase):
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
                      architecture_type=a_type, dropout=dp1, name='RNN-1')
-            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
@@ -1107,9 +1111,10 @@ class TestNN(unittest.TestCase):
             # ---------------------
             # Layer 1
             seq_len = 101
+            batch_size = seq_len - r_size
             num_neurons_rnn = 24
-            X = np.zeros((seq_len, 13), dtype=conf.dtype)
-            X[range(seq_len), np.random.randint(13, size=seq_len)] = 1
+            X = np.zeros((batch_size, 13), dtype=conf.dtype)
+            X[range(batch_size), np.random.randint(13, size=batch_size)] = 1
             w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
             w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
             w_1 = {'hidden': w_1h, 'inp': w_1x}
@@ -1124,7 +1129,7 @@ class TestNN(unittest.TestCase):
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
                      architecture_type=a_type, dropout=dp1, name='RNN-1')
-            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp1, dtype=conf.dtype)
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
@@ -1135,7 +1140,8 @@ class TestNN(unittest.TestCase):
             # Case-3 - Sandwitched Layers - FC - RNN - FC
             # -------------------------------------------
             # Layer 1
-            batch_size = seq_len = 99
+            seq_len = 99
+            batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_fc = 30
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
@@ -1157,13 +1163,13 @@ class TestNN(unittest.TestCase):
             # ----------------
             dp1 = np.random.rand()
             l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU', dropout=dp1, name='FC-1')
-            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_fc) < dp1, dtype=conf.dtype)
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_fc) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
             l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh',
                      architecture_type=a_type, dropout=dp2, name='RNN-2')
-            mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn) < dp2, dtype=conf.dtype)
+            mask_l2 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
@@ -1174,7 +1180,8 @@ class TestNN(unittest.TestCase):
             # Case-4 - Sandwitched Layers - RNN - RNN - FC
             # --------------------------------------------
             # Layer 1
-            batch_size = seq_len = 90
+            seq_len = 90
+            batch_size = seq_len - r_size
             inp_feat_size = 17
             num_neurons_rnn_1 = 11
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
@@ -1199,13 +1206,15 @@ class TestNN(unittest.TestCase):
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn_1, w_1, b_1, seq_len, activation_fn='Tanh',
                      architecture_type='many_to_many', dropout=dp1, name='RNN-1')
-            mask_l1 = np.array(np.random.rand(seq_len, num_neurons_rnn_1) < dp1, dtype=conf.dtype)
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn_1) < dp1,
+                               dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
             l2 = RNN(l1, num_neurons_rnn_2, w_2, b_2, seq_len, activation_fn='Tanh',
                      architecture_type=a_type, dropout=dp2, name='RNN-2')
-            mask_l2 = np.array(np.random.rand(seq_len, num_neurons_rnn_2) < dp2, dtype=conf.dtype)
+            mask_l2 = np.array(np.random.rand(batch_size, num_neurons_rnn_2) < dp2,
+                               dtype=conf.dtype)
             l2.dropout_mask = mask_l2
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')

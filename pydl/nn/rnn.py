@@ -37,6 +37,7 @@ class RNN(Layer):
         super().__init__(name=name)
         self._weights = OrderedDict()
         self._inputs = OrderedDict()
+        self._hidden_state = OrderedDict()
         self._output = OrderedDict()
 
         self._weights_grad = OrderedDict()
@@ -91,12 +92,15 @@ class RNN(Layer):
         else:
             self._bias = None
 
-        self._output[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
         self.reset_gradients()
 
         if dropout is not None and dropout < 1.0:
-            self._dropout = [Dropout(p=dropout, activation_fn=self._activation_fn[0].type) for _ in
-                             range(self._seq_len + 1)]
+            if self._architecture_type == 'many_to_many':
+                self._dropout = [Dropout(p=dropout, activation_fn=self._activation_fn[0].type)
+                                 for _ in range(self._seq_len + 1)]
+            else:
+                self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn[0].type)
 
     # Getters
     # -------
@@ -258,10 +262,10 @@ class RNN(Layer):
             self._inputs[t] = inp.reshape(1, -1)
 
             # Sum of weighted inputs
-            z = self.score_fn({'h': self._output[t - 1], 'inp': inp})
+            z = self.score_fn({'h': self._hidden_state[t - 1], 'inp': inp})
 
             # Nonlinearity Activation
-            self._output[t] = self._activation_fn[t].forward(z)
+            self._hidden_state[t] = self._activation_fn[t].forward(z)
 
             # Dropout
             if self._dropout is not None:
@@ -272,12 +276,22 @@ class RNN(Layer):
                         drop_mask = self.dropout_mask[t - 1]
 
                     # Apply Dropout Mask
-                    self._output[t] = self._dropout[t].forward(self._output[t], drop_mask)
+                    try:  # Case: Many-to-many
+                        self._output[t] = self._dropout[t].forward(self._hidden_state[t], drop_mask)
+                    except TypeError:  # Case: Many-to-one
+                        if t == inputs.shape[0]:
+                            self._output[t] = \
+                                self._dropout.forward(self._hidden_state[t], drop_mask)
                 else:  # Inference
                     if self._activation_fn[t].type in ['Sigmoid', 'Tanh', 'SoftMax']:
-                        self._output[t] *= self.dropout[t].p
+                        try:  # Case: Many-to-many
+                            self._output[t] = self._hidden_state[t] * self.dropout[t].p
+                        except TypeError:  # Case: Many-to-one
+                            self._output[t] = self._hidden_state[t] * self.dropout.p
                     else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
                         pass  # Do nothing - Inverse Dropout
+            else:
+                self._output[t] = self._hidden_state[t]
 
         if self._architecture_type == 'many_to_one':
             # Pass through the output of the final sequence only
@@ -294,7 +308,12 @@ class RNN(Layer):
             if self._architecture_type == 'many_to_one':
                 if t <= list(inp_grad.keys())[-1]:
                     if t == list(inp_grad.keys())[-1]:
-                        grad = hidden_grad + inp_grad[t]
+                        # Backpropagating through Dropout
+                        if self._dropout is not None:
+                            drop_grad = self._dropout.backward(inp_grad[t])
+                        else:
+                            drop_grad = inp_grad[t]
+                        grad = hidden_grad + drop_grad
                     else:
                         grad = hidden_grad
                         if len(grad.shape) == 1:
@@ -303,22 +322,22 @@ class RNN(Layer):
                     continue
             else:
                 try:
-                    grad = hidden_grad + inp_grad[t]
+                    # Backpropagating through Dropout
+                    if self._dropout is not None:
+                        drop_grad = self._dropout[t].backward(inp_grad[t])
+                    else:
+                        drop_grad = inp_grad[t]
+                    grad = hidden_grad + drop_grad
                 except KeyError:
                     continue
 
-            # Backpropagating through Dropout
-            if self._dropout is not None:
-                drop_grad = self._dropout[t].backward(grad)
-            else:
-                drop_grad = grad
-
             # dy/dz: Gradient of the layer output w.r.t the logits 'z'
-            activation_grad = self._activation_fn[t].backward(drop_grad)
+            activation_grad = self._activation_fn[t].backward(grad)
 
             # dy/dw: Gradient of the layer output w.r.t the weights 'wh' and 'wx'
             self._weights_grad['hidden'] += \
-                self.hidden_weight_gradients(activation_grad, self._output[t - 1], reg_lambda)
+                self.hidden_weight_gradients(activation_grad, self._hidden_state[t - 1],
+                                             reg_lambda)
             self._weights_grad['inp'] += \
                 self.input_weight_gradients(activation_grad, self._inputs[t], reg_lambda)
 
@@ -348,13 +367,14 @@ class RNN(Layer):
     def reset_internal_states(self, hidden_state=None):
         try:
             if hidden_state.lower() == 'previous_state':
-                hidden_state = list(self._output.values())[-1]
+                hidden_state = list(self._hidden_state.values())[-1]
         except AttributeError:
             pass
 
         self._inputs = OrderedDict()
         self._output = OrderedDict()
+        self._hidden_state = OrderedDict()
         if hidden_state is None:
-            self._output[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+            self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
         else:
-            self._output[0] = hidden_state
+            self._hidden_state[0] = hidden_state

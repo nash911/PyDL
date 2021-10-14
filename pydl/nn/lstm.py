@@ -27,6 +27,7 @@ class LSTM(Layer):
         self._weights = OrderedDict()
         self._inputs = OrderedDict()
         self._cell_state = OrderedDict()
+        self._hidden_state = OrderedDict()
         self._output = OrderedDict()
 
         self._weights_grad = OrderedDict()
@@ -85,7 +86,7 @@ class LSTM(Layer):
         self._cell_state_activation_fn = [Tanh() for _ in range(self._seq_len + 1)]
 
         # Initialize Hidden state
-        self._output[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
 
         self.reset_gradients()
 
@@ -191,7 +192,7 @@ class LSTM(Layer):
                 inputs = inputs.reshape(batch_size, -1)
 
         for t, inp in enumerate(inputs[:, np.newaxis, :], start=1):
-            concat_inputs = np.concatenate((self._output[t - 1], inp), axis=-1)
+            concat_inputs = np.concatenate((self._hidden_state[t - 1], inp), axis=-1)
 
             # Store concatenated inputs in dict for backprop
             self._inputs[t] = concat_inputs
@@ -210,29 +211,16 @@ class LSTM(Layer):
             # cₜ = f ⊙ cₜ-₁ + i ⊙ g
             self._cell_state[t] = (f_gate * self._cell_state[t - 1]) + (i_gate * g_gate)
             # hₜ = o ⊙ tanh(cₜ)
-            self._output[t] = \
+            self._hidden_state[t] = \
                 o_gate * self._cell_state_activation_fn[t].forward(self._cell_state[t])
 
-            # # Dropout
-            # if self._dropout is not None:
-            #     if not inference:  # Training step
-            #         if self.dropout_mask is None:
-            #             drop_mask = None if mask is None else mask[t - 1]
-            #         else:
-            #             drop_mask = self.dropout_mask[t - 1]
-            #
-            #         # Apply Dropout Mask
-            #         self._output[t] = self._dropout[t].forward(self._output[t], drop_mask)
-            #     else:  # Inference
-            #         if self._activation_fn[t].type in ['Sigmoid', 'Tanh', 'SoftMax']:
-            #             self._output[t] *= self.dropout[t].p
-            #         else:  # Activation Fn. ∈ {'Linear', 'ReLU'}
-            #             pass  # Do nothing - Inverse Dropout
+            self._output[t] = self._hidden_state[t]
 
         if self._architecture_type == 'many_to_one':
             # Pass through the output of the final sequence only
             single_out_dict = OrderedDict()
-            single_out_dict[list(self._output.keys())[-1]] = list(self._output.values())[-1]
+            single_out_dict[list(self._hidden_state.keys())[-1]] = \
+                list(self._hidden_state.values())[-1]
             return single_out_dict
         else:
             return self._output
@@ -257,12 +245,6 @@ class LSTM(Layer):
                     grad = hidden_grad + inp_grad[t]
                 except KeyError:
                     continue
-
-            # # Backpropagating through Dropout
-            # if self._dropout is not None:
-            #     drop_grad = self._dropout[t].backward(grad)
-            # else:
-            #     drop_grad = grad
 
             # Outputs of gate activations
             i_out = self._i_gate[t].output
@@ -321,7 +303,7 @@ class LSTM(Layer):
     def reset_internal_states(self, hidden_state=None, cell_state=None):
         try:
             if hidden_state.lower() == 'previous_state':
-                hidden_state = list(self._output.values())[-1]
+                hidden_state = list(self._hidden_state.values())[-1]
                 cell_state = list(self._cell_state.values())[-1]
         except AttributeError:
             pass
@@ -329,12 +311,13 @@ class LSTM(Layer):
         try:
             if cell_state.lower() == 'previous_state':
                 cell_state = list(self._cell_state.values())[-1]
-                hidden_state = list(self._output.values())[-1]
+                hidden_state = list(self._hidden_state.values())[-1]
         except AttributeError:
             pass
 
         self._inputs = OrderedDict()
         self._cell_state = OrderedDict()
+        self._hidden_state = OrderedDict()
         self._output = OrderedDict()
 
         if cell_state is None:
@@ -343,6 +326,6 @@ class LSTM(Layer):
             self._cell_state[0] = cell_state
 
         if hidden_state is None:
-            self._output[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+            self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
         else:
-            self._output[0] = hidden_state
+            self._hidden_state[0] = hidden_state

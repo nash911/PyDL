@@ -73,6 +73,7 @@ class TestRNN(unittest.TestCase):
         # Combinatorial Test Cases
         # ------------------------
         sequence_length = [1, 2, 3, 5, 6, 11]
+        reduce_size = [0, 1]
         feature_size = [1, 2, 3, 5, 6, 11]
         num_neurons = [1, 2, 3, 5, 6, 11]
         one_hot = [True, False]
@@ -80,15 +81,16 @@ class TestRNN(unittest.TestCase):
         dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
 
-        for seq_len, feat, neur, oh, scl, dout, a_type in list(itertools.product(
-                sequence_length, feature_size, num_neurons, one_hot, scale, dropout,
+        for seq_len, r_size, feat, neur, oh, scl, dout, a_type in list(itertools.product(
+                sequence_length, reduce_size, feature_size, num_neurons, one_hot, scale, dropout,
                 architecture_type)):
+            batch_size = seq_len - (r_size if seq_len > 1 else 0)
             if oh:
-                X = np.zeros((seq_len, feat), dtype=conf.dtype)
-                rnd_idx = np.random.randint(feat, size=seq_len)
-                X[range(seq_len), rnd_idx] = 1
+                X = np.zeros((batch_size, feat), dtype=conf.dtype)
+                rnd_idx = np.random.randint(feat, size=batch_size)
+                X[range(batch_size), rnd_idx] = 1
             else:
-                X = np.random.uniform(-scl, scl, (seq_len, feat))
+                X = np.random.uniform(-scl, scl, (batch_size, feat))
 
             wh = np.random.rand(neur, neur) * scl
             wx = np.random.rand(feat, neur) * scl
@@ -98,7 +100,6 @@ class TestRNN(unittest.TestCase):
             # Linear
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_linear = OrderedDict()
-            true_out_linear[0] = h
             p = None
             mask = None
             for i, x in enumerate(X):
@@ -108,20 +109,21 @@ class TestRNN(unittest.TestCase):
                         p = np.random.rand()
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
-                    h *= mask[-1]
-                if a_type == 'many_to_one':
-                    if i == seq_len - 1:
-                        true_out_linear = OrderedDict()
-                        true_out_linear[i + 1] = h
+                    layer_out = h * mask[-1]
                 else:
-                    true_out_linear[i + 1] = h
+                    layer_out = h
+                if a_type == 'many_to_one':
+                    if i == batch_size - 1:
+                        true_out_linear = OrderedDict()
+                        true_out_linear[i + 1] = layer_out
+                else:
+                    true_out_linear[i + 1] = layer_out
             test(X, w, seq_len, true_out_linear, bias, actv_fn='Linear', p=p, mask=mask,
                  architecture_type=a_type)
 
             # Sigmoid
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_sigmoid = OrderedDict()
-            true_out_sigmoid[0] = h
             p = None
             mask = None
             for i, x in enumerate(X):
@@ -132,20 +134,21 @@ class TestRNN(unittest.TestCase):
                         p = np.random.rand()
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
-                    h *= mask[-1]
-                if a_type == 'many_to_one':
-                    if i == seq_len - 1:
-                        true_out_sigmoid = OrderedDict()
-                        true_out_sigmoid[i + 1] = h
+                    layer_out = h * mask[-1]
                 else:
-                    true_out_sigmoid[i + 1] = h
+                    layer_out = h
+                if a_type == 'many_to_one':
+                    if i == batch_size - 1:
+                        true_out_sigmoid = OrderedDict()
+                        true_out_sigmoid[i + 1] = layer_out
+                else:
+                    true_out_sigmoid[i + 1] = layer_out
             test(X, w, seq_len, true_out_sigmoid, bias, actv_fn='Sigmoid', p=p, mask=mask,
                  architecture_type=a_type)
 
             # Tanh
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_tanh = OrderedDict()
-            true_out_tanh[0] = h
             p = None
             mask = None
             for i, x in enumerate(X):
@@ -156,20 +159,21 @@ class TestRNN(unittest.TestCase):
                         p = np.random.rand()
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
-                    h *= mask[-1]
-                if a_type == 'many_to_one':
-                    if i == seq_len - 1:
-                        true_out_tanh = OrderedDict()
-                        true_out_tanh[i + 1] = h
+                    layer_out = h * mask[-1]
                 else:
-                    true_out_tanh[i + 1] = h
+                    layer_out = h
+                if a_type == 'many_to_one':
+                    if i == batch_size - 1:
+                        true_out_tanh = OrderedDict()
+                        true_out_tanh[i + 1] = layer_out
+                else:
+                    true_out_tanh[i + 1] = layer_out
             test(X, w, seq_len, true_out_tanh, bias, actv_fn='Tanh', p=p, mask=mask,
                  architecture_type=a_type)
 
             # ReLU
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_relu = OrderedDict()
-            true_out_relu[0] = h
             p = None
             mask = None
             for i, x in enumerate(X):
@@ -180,20 +184,21 @@ class TestRNN(unittest.TestCase):
                         p = np.random.rand()
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype) / p)
-                    h *= mask[-1]
-                if a_type == 'many_to_one':
-                    if i == seq_len - 1:
-                        true_out_relu = OrderedDict()
-                        true_out_relu[i + 1] = h
+                    layer_out = h * mask[-1]
                 else:
-                    true_out_relu[i + 1] = h
+                    layer_out = h
+                if a_type == 'many_to_one':
+                    if i == batch_size - 1:
+                        true_out_relu = OrderedDict()
+                        true_out_relu[i + 1] = layer_out
+                else:
+                    true_out_relu[i + 1] = layer_out
             test(X, w, seq_len, true_out_relu, bias, actv_fn='ReLU', p=p, mask=mask,
                  architecture_type=a_type)
 
             # SoftMax
             h = np.zeros((1, neur), dtype=conf.dtype)
             true_out_softmax = OrderedDict()
-            true_out_softmax[0] = h
             p = None
             mask = None
             for i, x in enumerate(X):
@@ -205,13 +210,15 @@ class TestRNN(unittest.TestCase):
                         p = np.random.rand()
                         mask = list()
                     mask.append(np.array(np.random.rand(*h.shape) < p, dtype=conf.dtype))
-                    h *= mask[-1]
-                if a_type == 'many_to_one':
-                    if i == seq_len - 1:
-                        true_out_softmax = OrderedDict()
-                        true_out_softmax[i + 1] = h
+                    layer_out = h * mask[-1]
                 else:
-                    true_out_softmax[i + 1] = h
+                    layer_out = h
+                if a_type == 'many_to_one':
+                    if i == batch_size - 1:
+                        true_out_softmax = OrderedDict()
+                        true_out_softmax[i + 1] = layer_out
+                else:
+                    true_out_softmax[i + 1] = layer_out
             test(X, w, seq_len, true_out_softmax, bias, actv_fn='Softmax', p=p, mask=mask,
                  architecture_type=a_type)
 
@@ -338,6 +345,7 @@ class TestRNN(unittest.TestCase):
         # Combinatorial Test Cases
         # ------------------------
         sequence_length = [1, 2, 3, 11]
+        reduce_size = [0, 1]
         feature_size = [1, 2, 3, 11]
         num_neurons = [1, 2, 3, 11]
         one_hot = [True, False]
@@ -348,18 +356,19 @@ class TestRNN(unittest.TestCase):
         architecture_type = ['many_to_many', 'many_to_one']
         repeat = list(range(1))
 
-        for seq_len, feat, neur, oh, scl, unit, actv, dout, a_type, r in \
-            list(itertools.product(sequence_length, feature_size, num_neurons, one_hot, scale,
-                                   unit_inp_grad, activation_fn, dropout, architecture_type,
+        for seq_len, r_size, feat, neur, oh, scl, unit, actv, dout, a_type, r in \
+            list(itertools.product(sequence_length, reduce_size, feature_size, num_neurons, one_hot,
+                                   scale, unit_inp_grad, activation_fn, dropout, architecture_type,
                                    repeat)):
+            batch_size = seq_len - (r_size if seq_len > 1 else 0)
 
             # Initialize inputs
             if oh:
-                X = np.zeros((seq_len, feat), dtype=conf.dtype)
-                rnd_idx = np.random.randint(feat, size=seq_len)
-                X[range(seq_len), rnd_idx] = 1
+                X = np.zeros((batch_size, feat), dtype=conf.dtype)
+                rnd_idx = np.random.randint(feat, size=batch_size)
+                X[range(batch_size), rnd_idx] = 1
             else:
-                X = np.random.uniform(-scl, scl, (seq_len, feat))
+                X = np.random.uniform(-scl, scl, (batch_size, feat))
 
             # Initialize weights and bias
             wh = np.random.rand(neur, neur) * scl
@@ -370,17 +379,17 @@ class TestRNN(unittest.TestCase):
             # Initialize input gradients
             inp_grad = OrderedDict()
             if a_type == 'many_to_many':
-                for s in range(1, seq_len + 1):
+                for s in range(1, batch_size + 1):
                     inp_grad[s] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                         np.random.uniform(-1, 1, (1, neur))
             else:
-                inp_grad[seq_len] = np.ones((1, neur), dtype=conf.dtype) if unit else \
+                inp_grad[batch_size] = np.ones((1, neur), dtype=conf.dtype) if unit else \
                     np.random.uniform(-1, 1, (1, neur))
 
             # Set dropout mask
             if dout:
                 p = np.random.rand()
-                mask = np.array(np.random.rand(seq_len, neur) < p, dtype=conf.dtype)
+                mask = np.array(np.random.rand(batch_size, neur) < p, dtype=conf.dtype)
                 if actv in ['Linear', 'ReLU']:
                     mask /= p
             else:

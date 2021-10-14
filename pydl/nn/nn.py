@@ -48,7 +48,7 @@ class NN:
                 # Stack layer outputs as dicts into a numpy array
                 if layer.architecture_type == 'many_to_many':
                     seq_len = len(layer_out)
-                    layer_inp = np.vstack([layer_out[t] for t in range(1, seq_len)])
+                    layer_inp = np.vstack([layer_out[t] for t in range(1, seq_len + 1)])
                 else:  # 'many_to_one'
                     layer_inp = list(layer_out.values())[-1]
             else:
@@ -70,7 +70,7 @@ class NN:
                     for t, grad in enumerate(layer_inp_grad, start=1):
                         inp_grad_dict[t] = grad
                 else:  # 'many_to_one'
-                    inp_grad_dict[layer.seq_len] = layer_inp_grad
+                    inp_grad_dict[list(layer.output.keys())[-1]] = layer_inp_grad
                 layer_inp_grad = inp_grad_dict
             elif layer.type not in ['RNN_Layer', 'LSTM_Layer'] and \
                     type(layer_inp_grad) is OrderedDict:
