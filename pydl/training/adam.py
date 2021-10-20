@@ -33,6 +33,12 @@ class Adam(PlainTraining, RecurrentTraining):
 
                 v = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
+
+                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                    if layer.tune_internal_states:
+                        v['h'] = np.zeros_like(layer.init_hidden_state)
+                except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
+                    pass
             else:
                 m = None
                 v = None
@@ -68,10 +74,16 @@ class Adam(PlainTraining, RecurrentTraining):
                 # First order moment update
                 m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * layer.weights_grad)
                 m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * layer.bias_grad)
+                if layer.hidden_state_grad is not None:
+                    m['h'] = \
+                        (self._beta_1 * m['h']) + ((1 - self._beta_1) * layer.hidden_state_grad)
 
                 # Second order moment update
                 v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (layer.weights_grad**2))
                 v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (layer.bias_grad**2))
+                if layer.hidden_state_grad is not None:
+                    v['h'] = (self._beta_2 * v['h']) + \
+                             ((1 - self._beta_2) * (layer.hidden_state_grad**2))
 
                 # Update Weights
                 m_hat_w = m['w'] / (1.0 - self._beta_1**t)
@@ -83,4 +95,12 @@ class Adam(PlainTraining, RecurrentTraining):
                 v_hat_b = v['b'] / (1.0 - self._beta_2**t)
                 layer.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
 
+                # Update Hidden State
+                if layer.hidden_state_grad is not None:
+                    m_hat_h = m['h'] / (1.0 - self._beta_1**t)
+                    v_hat_h = v['h'] / (1.0 - self._beta_2**t)
+                    layer.init_hidden_state += \
+                        -(self._step_size * m_hat_h) / (np.sqrt(v_hat_h) + 1e-8)
+
+            # Reset Layer
             layer.reset()

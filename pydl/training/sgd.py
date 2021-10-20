@@ -41,7 +41,14 @@ class SGD(PlainTraining, RecurrentTraining):
     def update_network(self, t=None):
         for layer in self._nn.layers:
             if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+                # Update Weights
                 layer.weights += -self._step_size * layer.weights_grad
+
+                # Update Bias
                 if layer.bias is not None:
                     layer.bias += -self._step_size * layer.bias_grad
+
+                # Update Hidden State
+                if layer.hidden_state_grad is not None:
+                    layer.init_hidden_state += -self._step_size * layer.hidden_state_grad
             layer.reset()

@@ -33,12 +33,13 @@ class RNN(Layer):
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, seq_len=None, xavier=True,
                  weight_scale=1.0, activation_fn='Tanh', architecture_type='many_to_many',
-                 dropout=None, name=None):
+                 dropout=None, tune_internal_states=False, name=None):
         super().__init__(name=name)
         self._weights = OrderedDict()
         self._inputs = OrderedDict()
         self._hidden_state = OrderedDict()
         self._output = OrderedDict()
+        self._init_hidden_state = None
 
         self._weights_grad = OrderedDict()
         self._out_grad = OrderedDict()
@@ -58,6 +59,8 @@ class RNN(Layer):
         self._has_bias = True if type(bias) == np.ndarray else bias
         self._activation_fn = [activations[activation_fn.lower()]() for _ in
                                range(self._seq_len + 1)]
+        self._tune_internal_states = tune_internal_states
+        self._update_init_internal_states = True
 
         if weights is not None:
             # Assert that the weights dict has two values, each of which is a 2D array
@@ -92,7 +95,8 @@ class RNN(Layer):
         else:
             self._bias = None
 
-        self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._init_hidden_state = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._hidden_state[0] = self._init_hidden_state
         self.reset_gradients()
 
         if dropout is not None and dropout < 1.0:
@@ -125,6 +129,10 @@ class RNN(Layer):
         return self._weights['inp']
 
     @property
+    def init_hidden_state(self):
+        return self._init_hidden_state
+
+    @property
     def shape(self):
         return (None, self._num_neurons)
 
@@ -135,6 +143,10 @@ class RNN(Layer):
     @property
     def num_neurons(self):
         return self._num_neurons
+
+    @property
+    def tune_internal_states(self):
+        return self._tune_internal_states
 
     @property
     def weights_grad(self):
@@ -165,6 +177,11 @@ class RNN(Layer):
         assert(w.shape == self._weights['inp'].shape)
         self._weights['inp'] = w
 
+    @init_hidden_state.setter
+    def init_hidden_state(self, h):
+        assert(h.shape == self._init_hidden_state.shape)
+        np.copyto(self._init_hidden_state, h)
+
     def reinitialize_weights(self, inputs=None, num_neurons=None):
         num_feat = self._inp_size if inputs is None else np.prod(inputs.shape[1:])
         num_neurons = self._num_neurons if num_neurons is None else num_neurons
@@ -193,6 +210,7 @@ class RNN(Layer):
         self._weights_grad['hidden'] = np.zeros_like(self._weights['hidden'])
         self._weights_grad['inp'] = np.zeros_like(self._weights['inp'])
         self._bias_grad = np.zeros_like(self._bias)
+        self._hidden_state_grad = None
         self._out_grad = OrderedDict()
 
     def score_fn(self, inputs, weights=None):
@@ -350,6 +368,14 @@ class RNN(Layer):
             self._out_grad[t] = self.input_gradients(activation_grad)
             hidden_grad = self.hidden_gradients(activation_grad)
 
+        if self._tune_internal_states and self._update_init_internal_states:
+            if len(hidden_grad.shape) == 1:
+                hidden_grad = np.expand_dims(hidden_grad, axis=0)
+            self._hidden_state_grad = hidden_grad
+            self._update_init_internal_states = False
+        else:
+            self._hidden_state_grad = None
+
         return self._out_grad
 
     def update_weights(self, alpha):
@@ -376,6 +402,7 @@ class RNN(Layer):
         self._output = OrderedDict()
         self._hidden_state = OrderedDict()
         if hidden_state is None:
-            self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+            self._hidden_state[0] = self._init_hidden_state
+            self._update_init_internal_states = True
         else:
             self._hidden_state[0] = hidden_state

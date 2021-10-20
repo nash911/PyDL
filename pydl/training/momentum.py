@@ -28,6 +28,12 @@ class Momentum(PlainTraining, RecurrentTraining):
             if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 v = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
+
+                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                    if layer.tune_internal_states:
+                        v['h'] = np.zeros_like(layer.init_hidden_state)
+                except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
+                    pass
             else:
                 v = None
             self._vel.append(v)
@@ -63,4 +69,9 @@ class Momentum(PlainTraining, RecurrentTraining):
 
                 layer.weights += v['w']
                 layer.bias += v['b']
+
+                if layer.hidden_state_grad is not None:
+                    v['h'] = (v['h'] * self._mu) - (self._step_size * layer.hidden_state_grad)
+                    layer.init_hidden_state += v['h']
+
             layer.reset()

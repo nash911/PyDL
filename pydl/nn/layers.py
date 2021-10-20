@@ -47,6 +47,7 @@ class Layer(ABC):
         self._weights_grad = None
         self._bias_grad = None
         self._out_grad = None
+        self._hidden_state_grad = None
 
         self._batchnorm = None
         self._dropout = None
@@ -101,6 +102,10 @@ class Layer(ABC):
     @property
     def out_grad(self):
         return self._out_grad
+
+    @property
+    def hidden_state_grad(self):
+        return self._hidden_state_grad
 
     @property
     def dropout_mask(self):

@@ -28,6 +28,12 @@ class RMSprop(PlainTraining, RecurrentTraining):
             if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
                 c = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
+
+                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                    if layer.tune_internal_states:
+                        c['h'] = np.zeros_like(layer.init_hidden_state)
+                except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
+                    pass
             else:
                 c = None
             self._cache.append(c)
@@ -63,4 +69,10 @@ class RMSprop(PlainTraining, RecurrentTraining):
 
                 layer.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * layer.weights_grad
                 layer.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * layer.bias_grad
+
+                if layer.hidden_state_grad is not None:
+                    c['h'] = \
+                        (self._beta * c['h']) + ((1 - self._beta) * (layer.hidden_state_grad**2))
+                    layer.init_hidden_state += -(self._step_size / (np.sqrt(c['h']) + 1e-6)) * \
+                        layer.hidden_state_grad
             layer.reset()

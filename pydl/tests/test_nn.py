@@ -467,10 +467,12 @@ class TestNN(unittest.TestCase):
         wh = layer.hidden_weights
         wx = layer.input_weights
         bias = layer.bias
+        init_hidden_state = np.copy(layer.init_hidden_state)
 
         hidden_weights_grad = layer.hidden_weights_grad
         input_weights_grad = layer.input_weights_grad
         bias_grad = layer.bias_grad
+        hidden_grad = layer.hidden_state_grad
 
         # Hidden weights finite difference gradients
         hidden_weights_finite_diff = np.empty(hidden_weights_grad.shape)
@@ -524,6 +526,24 @@ class TestNN(unittest.TestCase):
             print("AssertionError Bias: ", layer.name)
             npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
         layer.bias = bias
+
+        # Initial hidden state finite difference gradients
+        hidden_finite_diff = np.empty(hidden_grad.shape)
+        for i in range(hidden_grad.shape[0]):
+            for j in range(hidden_grad.shape[1]):
+                h_delta = np.zeros_like(init_hidden_state)
+                h_delta[i, j] = delta
+                layer.init_hidden_state = init_hidden_state + h_delta
+                lhs = nn.forward(inp)
+                layer.init_hidden_state = init_hidden_state - h_delta
+                rhs = nn.forward(inp)
+                hidden_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Initial Hidden State: ", layer.name)
+            npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+        layer.init_hidden_state = init_hidden_state
 
     def lstm_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
         tol = 7
@@ -1076,6 +1096,7 @@ class TestNN(unittest.TestCase):
 
         architecture_type = ['many_to_many', 'many_to_one']
         reduce_size = [0, 3]
+        scl = 0.1
 
         for a_type, r_size in list(itertools.product(architecture_type, reduce_size)):
             # Case-1 - Continuous Inputs
@@ -1085,24 +1106,26 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_rnn = 15
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
-            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
-            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * scl
+            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * scl
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * scl
+            init_h = np.random.randn(1, num_neurons_rnn) * scl
 
             # Layer 2
             num_neurons_fc = 20
-            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * 0.01
-            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
-                     architecture_type=a_type, dropout=dp1, name='RNN-1')
+                     architecture_type=a_type, dropout=dp1, tune_internal_states=True, name='RNN-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
+            l1.init_hidden_state = init_h
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
@@ -1118,21 +1141,21 @@ class TestNN(unittest.TestCase):
             num_neurons_rnn = 24
             X = np.zeros((batch_size, inp_feat_size), dtype=conf.dtype)
             X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
-            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
-            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * 0.01
+            w_1h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * scl
+            w_1x = np.random.randn(X.shape[-1], num_neurons_rnn) * scl
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn)) * scl
 
             # Layer 2
             num_neurons_fc = 10
-            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * 0.01
-            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            w_2 = np.random.randn(b_1.shape[-1], num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn, w_1, b_1, seq_len, activation_fn='Tanh',
-                     architecture_type=a_type, dropout=dp1, name='RNN-1')
+                     architecture_type=a_type, dropout=dp1, tune_internal_states=True, name='RNN-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
@@ -1148,21 +1171,21 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_fc = 30
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
-            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * 0.01
-            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * scl
+            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # Layer 2
             num_neurons_rnn = 15
-            w_2h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * 0.01
-            w_2x = np.random.randn(w_1.shape[-1], num_neurons_rnn) * 0.01
+            w_2h = np.random.randn(num_neurons_rnn, num_neurons_rnn) * scl
+            w_2x = np.random.randn(w_1.shape[-1], num_neurons_rnn) * scl
             w_2 = {'hidden': w_2h, 'inp': w_2x}
-            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn)) * scl
 
             # Layer 3
             num_neurons_fc_out = 20
-            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * 0.01
-            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
+            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
 
             # RNN Architecture
             # ----------------
@@ -1173,7 +1196,7 @@ class TestNN(unittest.TestCase):
 
             dp2 = np.random.rand()
             l2 = RNN(l1, num_neurons_rnn, w_2, b_2, seq_len, activation_fn='Tanh',
-                     architecture_type=a_type, dropout=dp2, name='RNN-2')
+                     architecture_type=a_type, dropout=dp2, tune_internal_states=True, name='RNN-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neurons_rnn) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
 
@@ -1189,36 +1212,37 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 17
             num_neurons_rnn_1 = 11
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
-            w_1h = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_1) * 0.01
-            w_1x = np.random.randn(inp_feat_size, num_neurons_rnn_1) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1h = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_1) * scl
+            w_1x = np.random.randn(inp_feat_size, num_neurons_rnn_1) * scl
             w_1 = {'hidden': w_1h, 'inp': w_1x}
-            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn_1)) * 0.01
+            b_1 = np.random.uniform(-1, 1, (num_neurons_rnn_1)) * scl
 
             # Layer 2
             num_neurons_rnn_2 = 31
-            w_2h = np.random.randn(num_neurons_rnn_2, num_neurons_rnn_2) * 0.01
-            w_2x = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_2) * 0.01
+            w_2h = np.random.randn(num_neurons_rnn_2, num_neurons_rnn_2) * scl
+            w_2x = np.random.randn(num_neurons_rnn_1, num_neurons_rnn_2) * scl
             w_2 = {'hidden': w_2h, 'inp': w_2x}
-            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn_2)) * 0.01
+            b_2 = np.random.uniform(-1, 1, (num_neurons_rnn_2)) * scl
 
             # Layer 3
             num_neurons_fc_out = 24
-            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * 0.01
-            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
+            w_3 = np.random.randn(b_2.shape[-1], num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
 
             # RNN Architecture
             # ----------------
             dp1 = np.random.rand()
             l1 = RNN(X, num_neurons_rnn_1, w_1, b_1, seq_len, activation_fn='Tanh',
-                     architecture_type='many_to_many', dropout=dp1, name='RNN-1')
+                     architecture_type='many_to_many', dropout=dp1, tune_internal_states=True,
+                     name='RNN-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_rnn_1) < dp1,
                                dtype=conf.dtype)
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
             l2 = RNN(l1, num_neurons_rnn_2, w_2, b_2, seq_len, activation_fn='Tanh',
-                     architecture_type=a_type, dropout=dp2, name='RNN-2')
+                     architecture_type=a_type, dropout=dp2, tune_internal_states=True, name='RNN-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neurons_rnn_2) < dp2,
                                dtype=conf.dtype)
             l2.dropout_mask = mask_l2
@@ -1251,6 +1275,7 @@ class TestNN(unittest.TestCase):
 
         architecture_type = ['many_to_many', 'many_to_one']
         reduce_size = [0, 5]
+        scl = 0.1
 
         for a_type, r_size in list(itertools.product(architecture_type, reduce_size)):
             # Case-1 - Continuous Inputs
@@ -1260,14 +1285,14 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_lstm = 15
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
-            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
-            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * scl
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
 
             # Layer 2
             num_neurons_fc = 16
-            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * 0.01
-            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # LSTM Architecture
             # -----------------
@@ -1291,13 +1316,13 @@ class TestNN(unittest.TestCase):
             num_neurons_lstm = 24
             X = np.zeros((batch_size, inp_feat_size), dtype=conf.dtype)
             X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
-            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * 0.01
-            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+            w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * scl
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
 
             # Layer 2
             num_neurons_fc = 10
-            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * 0.01
-            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            w_2 = np.random.randn(num_neurons_lstm, num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # LSTM Architecture
             # -----------------
@@ -1319,20 +1344,20 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 25
             num_neurons_fc = 30
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
-            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * 0.01
-            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * scl
+            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
 
             # Layer 2
             num_neurons_lstm = 15
             w_2 = \
-                np.random.randn((num_neurons_lstm + num_neurons_fc), (4 * num_neurons_lstm)) * 0.01
-            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * 0.01
+                np.random.randn((num_neurons_lstm + num_neurons_fc), (4 * num_neurons_lstm)) * scl
+            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
 
             # Layer 3
             num_neurons_fc_out = 20
-            w_3 = np.random.randn(num_neurons_lstm, num_neurons_fc_out) * 0.01
-            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
+            w_3 = np.random.randn(num_neurons_lstm, num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
 
             # LSTM Architecture
             # -----------------
@@ -1359,21 +1384,21 @@ class TestNN(unittest.TestCase):
             batch_size = seq_len - r_size
             inp_feat_size = 17
             num_neurons_lstm_1 = 11
-            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * 0.01
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
             w_1 = \
-                np.random.randn((num_neurons_lstm_1 + X.shape[-1]), (4 * num_neurons_lstm_1)) * 0.01
-            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_1)) * 0.01
+                np.random.randn((num_neurons_lstm_1 + X.shape[-1]), (4 * num_neurons_lstm_1)) * scl
+            b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_1)) * scl
 
             # Layer 2
             num_neurons_lstm_2 = 31
             w_2 = np.random.randn((num_neurons_lstm_2 + num_neurons_lstm_1),
-                                  (4 * num_neurons_lstm_2)) * 0.01
-            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_2)) * 0.01
+                                  (4 * num_neurons_lstm_2)) * scl
+            b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_2)) * scl
 
             # Layer 3
             num_neurons_fc_out = 24
-            w_3 = np.random.randn(num_neurons_lstm_2, num_neurons_fc_out) * 0.01
-            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * 0.01
+            w_3 = np.random.randn(num_neurons_lstm_2, num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
 
             # LSTM Architecture
             # -----------------
