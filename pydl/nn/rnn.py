@@ -96,7 +96,8 @@ class RNN(Layer):
             self._bias = None
 
         self._init_hidden_state = np.zeros((1, self.num_neurons), dtype=conf.dtype)
-        self._hidden_state[0] = self._init_hidden_state
+        self._hidden_state[0] = self._activation_fn[0].forward(self._init_hidden_state) if \
+            self._tune_internal_states else self._init_hidden_state
         self.reset_gradients()
 
         if dropout is not None and dropout < 1.0:
@@ -371,7 +372,7 @@ class RNN(Layer):
         if self._tune_internal_states and self._update_init_internal_states:
             if len(hidden_grad.shape) == 1:
                 hidden_grad = np.expand_dims(hidden_grad, axis=0)
-            self._hidden_state_grad = hidden_grad
+            self._hidden_state_grad = self._activation_fn[0].backward(hidden_grad)
             self._update_init_internal_states = False
         else:
             self._hidden_state_grad = None
@@ -402,7 +403,7 @@ class RNN(Layer):
         self._output = OrderedDict()
         self._hidden_state = OrderedDict()
         if hidden_state is None:
-            self._hidden_state[0] = self._init_hidden_state
+            self._hidden_state[0] = self._activation_fn[0].forward(self._init_hidden_state)
             self._update_init_internal_states = True
         else:
             self._hidden_state[0] = hidden_state

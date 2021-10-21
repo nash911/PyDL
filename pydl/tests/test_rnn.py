@@ -61,8 +61,11 @@ class TestRNN(unittest.TestCase):
                  p=None, mask=None, architecture_type='many_to_many'):
             num_neur = w['hidden'].shape[0]
             rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn,
-                      architecture_type=architecture_type, dropout=p, tune_internal_states=True)
-            rnn.init_hidden_state = init_h_state
+                      architecture_type=architecture_type, dropout=p,
+                      tune_internal_states=(False if init_h_state is None else True))
+            if init_h_state is not None:
+                rnn.init_hidden_state = init_h_state
+                rnn.reset_internal_states()
             out_rnn = rnn.forward(inp, mask=mask)
 
             # Check if the output has the right keys
@@ -81,10 +84,11 @@ class TestRNN(unittest.TestCase):
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
         dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
+        tune_internal_states = [True, False]
 
-        for seq_len, r_size, feat, neur, oh, scl, dout, a_type in list(itertools.product(
+        for seq_len, r_size, feat, neur, oh, scl, dout, a_type, tune in list(itertools.product(
                 sequence_length, reduce_size, feature_size, num_neurons, one_hot, scale, dropout,
-                architecture_type)):
+                architecture_type, tune_internal_states)):
             batch_size = seq_len - (r_size if seq_len > 1 else 0)
             if oh:
                 X = np.zeros((batch_size, feat), dtype=conf.dtype)
@@ -99,8 +103,13 @@ class TestRNN(unittest.TestCase):
             bias = np.random.rand(neur) * scl
 
             # Linear
-            h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
-            h = np.copy(h_init)
+            if tune:
+                h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
+                h = np.copy(h_init)
+            else:
+                h = np.zeros((1, neur), dtype=conf.dtype)
+                h_init = None
+
             true_out_linear = OrderedDict()
             p = None
             mask = None
@@ -124,8 +133,13 @@ class TestRNN(unittest.TestCase):
                  architecture_type=a_type)
 
             # Sigmoid
-            h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
-            h = np.copy(h_init)
+            if tune:
+                h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
+                h = np.copy(h_init)
+                h = 1.0 / (1.0 + np.exp(-h))
+            else:
+                h = np.zeros((1, neur), dtype=conf.dtype)
+                h_init = None
             true_out_sigmoid = OrderedDict()
             p = None
             mask = None
@@ -150,8 +164,13 @@ class TestRNN(unittest.TestCase):
                  architecture_type=a_type)
 
             # Tanh
-            h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
-            h = np.copy(h_init)
+            if tune:
+                h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
+                h = np.copy(h_init)
+                h = (2.0 / (1.0 + np.exp(-2.0 * h))) - 1.0
+            else:
+                h = np.zeros((1, neur), dtype=conf.dtype)
+                h_init = None
             true_out_tanh = OrderedDict()
             p = None
             mask = None
@@ -176,8 +195,13 @@ class TestRNN(unittest.TestCase):
                  architecture_type=a_type)
 
             # ReLU
-            h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
-            h = np.copy(h_init)
+            if tune:
+                h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
+                h = np.copy(h_init)
+                h = np.maximum(0, h)
+            else:
+                h = np.zeros((1, neur), dtype=conf.dtype)
+                h_init = None
             true_out_relu = OrderedDict()
             p = None
             mask = None
@@ -202,8 +226,13 @@ class TestRNN(unittest.TestCase):
                  architecture_type=a_type)
 
             # SoftMax
-            h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
-            h = np.copy(h_init)
+            if tune:
+                h_init = np.array(np.random.rand(1, neur), dtype=conf.dtype) * scl
+                h = np.copy(h_init)
+                h = np.exp(h) / np.sum(np.exp(h), axis=-1, keepdims=True)
+            else:
+                h = np.zeros((1, neur), dtype=conf.dtype)
+                h_init = None
             true_out_softmax = OrderedDict()
             p = None
             mask = None
@@ -238,8 +267,11 @@ class TestRNN(unittest.TestCase):
             wh = w['hidden']
             wx = w['inp']
             rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn,
-                      architecture_type=architecture_type, tune_internal_states=True, dropout=p)
-            rnn.init_hidden_state = init_hidden_state
+                      architecture_type=architecture_type, dropout=p,
+                      tune_internal_states=(False if init_h_state is None else True))
+            if init_h_state is not None:
+                rnn.init_hidden_state = init_hidden_state
+                rnn.reset_internal_states()
             _ = rnn.forward(inp, mask=mask)
             inputs_grad = rnn.backward(inp_grad)
             hidden_weights_grad = rnn.hidden_weights_grad
@@ -306,26 +338,6 @@ class TestRNN(unittest.TestCase):
                     np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)))
             rnn.bias = bias
 
-            # Initial hidden state finite difference gradients
-            hidden_finite_diff = np.empty(hidden_grad.shape)
-            for i in range(init_hidden_state.shape[0]):
-                for j in range(init_hidden_state.shape[1]):
-                    h_delta = np.zeros(init_hidden_state.shape, dtype=conf.dtype)
-                    h_delta[i, j] = self.delta
-                    rnn.init_hidden_state = init_hidden_state + h_delta
-                    lhs = copy.deepcopy(rnn.forward(inp, mask=mask))
-                    rnn.init_hidden_state = init_hidden_state - h_delta
-                    rhs = copy.deepcopy(rnn.forward(inp, mask=mask))
-                    lhs_sum = np.zeros_like(list(lhs.values())[0])
-                    rhs_sum = np.zeros_like(list(rhs.values())[0])
-                    for k in list(lhs.keys()):
-                        if k > 0:
-                            lhs_sum += lhs[k] * inp_grad[k]
-                            rhs_sum += rhs[k] * inp_grad[k]
-                    hidden_finite_diff[i, j] = \
-                        np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
-            rnn.init_hidden_state = init_hidden_state
-
             # Inputs finite difference gradients
             inputs_grad = np.vstack(reversed(list(inputs_grad.values())))
             inputs_finite_diff = np.empty(inputs_grad.shape)
@@ -344,10 +356,35 @@ class TestRNN(unittest.TestCase):
                     inputs_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
 
+            if init_h_state is not None:
+                # Initial hidden state finite difference gradients
+                hidden_finite_diff = np.empty(hidden_grad.shape)
+                for i in range(init_hidden_state.shape[0]):
+                    for j in range(init_hidden_state.shape[1]):
+                        h_delta = np.zeros(init_hidden_state.shape, dtype=conf.dtype)
+                        h_delta[i, j] = self.delta
+                        rnn.init_hidden_state = init_hidden_state + h_delta
+                        rnn.reset_internal_states()
+                        lhs = copy.deepcopy(rnn.forward(inp, mask=mask))
+                        rnn.init_hidden_state = init_hidden_state - h_delta
+                        rnn.reset_internal_states()
+                        rhs = copy.deepcopy(rnn.forward(inp, mask=mask))
+                        lhs_sum = np.zeros_like(list(lhs.values())[0])
+                        rhs_sum = np.zeros_like(list(rhs.values())[0])
+                        for k in list(lhs.keys()):
+                            if k > 0:
+                                lhs_sum += lhs[k] * inp_grad[k]
+                                rhs_sum += rhs[k] * inp_grad[k]
+                        hidden_finite_diff[i, j] = \
+                            np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
+                rnn.init_hidden_state = init_hidden_state
+                rnn.reset_internal_states()
+
             npt.assert_almost_equal(hidden_weights_grad, hidden_weights_finite_diff, decimal=tol)
             npt.assert_almost_equal(input_weights_grad, input_weights_finite_diff, decimal=tol)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=tol)
-            npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+            if init_h_state is not None:
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
 
             if not actv_fn == 'ReLU':
                 npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
@@ -383,12 +420,13 @@ class TestRNN(unittest.TestCase):
         activation_fn = ['Linear', 'Sigmoid', 'Tanh', 'ReLU', 'Softmax']
         dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
+        tune_internal_states = [True, False]
         repeat = list(range(1))
 
-        for seq_len, r_size, feat, neur, oh, scl, unit, actv, dout, a_type, r in \
+        for seq_len, r_size, feat, neur, oh, scl, unit, actv, dout, a_type, tune, r in \
             list(itertools.product(sequence_length, reduce_size, feature_size, num_neurons, one_hot,
                                    scale, unit_inp_grad, activation_fn, dropout, architecture_type,
-                                   repeat)):
+                                   tune_internal_states, repeat)):
             batch_size = seq_len - (r_size if seq_len > 1 else 0)
 
             # Initialize inputs
@@ -404,7 +442,7 @@ class TestRNN(unittest.TestCase):
             wx = np.random.rand(feat, neur) * scl
             w = {'hidden': wh, 'inp': wx}
             bias = np.random.rand(neur) * scl
-            init_h_state = np.random.rand(1, neur) * scl
+            init_h_state = np.random.rand(1, neur) if tune else None
 
             # Initialize input gradients
             inp_grad = OrderedDict()
