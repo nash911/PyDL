@@ -268,8 +268,8 @@ class TestRNN(unittest.TestCase):
             wx = w['inp']
             rnn = RNN(inp, num_neur, w, bias, seq_len=seq_len, activation_fn=actv_fn,
                       architecture_type=architecture_type, dropout=p,
-                      tune_internal_states=(False if init_h_state is None else True))
-            if init_h_state is not None:
+                      tune_internal_states=(False if init_hidden_state is None else True))
+            if init_hidden_state is not None:
                 rnn.init_hidden_state = init_hidden_state
                 rnn.reset_internal_states()
             _ = rnn.forward(inp, mask=mask)
@@ -356,7 +356,7 @@ class TestRNN(unittest.TestCase):
                     inputs_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
 
-            if init_h_state is not None:
+            if init_hidden_state is not None:
                 # Initial hidden state finite difference gradients
                 hidden_finite_diff = np.empty(hidden_grad.shape)
                 for i in range(init_hidden_state.shape[0]):
@@ -383,7 +383,7 @@ class TestRNN(unittest.TestCase):
             npt.assert_almost_equal(hidden_weights_grad, hidden_weights_finite_diff, decimal=tol)
             npt.assert_almost_equal(input_weights_grad, input_weights_finite_diff, decimal=tol)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=tol)
-            if init_h_state is not None:
+            if init_hidden_state is not None:
                 npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
 
             if not actv_fn == 'ReLU':

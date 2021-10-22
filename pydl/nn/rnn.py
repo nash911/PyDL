@@ -370,6 +370,7 @@ class RNN(Layer):
             hidden_grad = self.hidden_gradients(activation_grad)
 
         if self._tune_internal_states and self._update_init_internal_states:
+            # Gradients of the initial hidden state (h_0)
             if len(hidden_grad.shape) == 1:
                 hidden_grad = np.expand_dims(hidden_grad, axis=0)
             self._hidden_state_grad = self._activation_fn[0].backward(hidden_grad)
@@ -403,7 +404,8 @@ class RNN(Layer):
         self._output = OrderedDict()
         self._hidden_state = OrderedDict()
         if hidden_state is None:
-            self._hidden_state[0] = self._activation_fn[0].forward(self._init_hidden_state)
+            self._hidden_state[0] = self._activation_fn[0].forward(self._init_hidden_state) if \
+                self._tune_internal_states else self._init_hidden_state
             self._update_init_internal_states = True
         else:
             self._hidden_state[0] = hidden_state
