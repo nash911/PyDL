@@ -32,6 +32,11 @@ class RMSprop(PlainTraining, RecurrentTraining):
                 try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
                     if layer.tune_internal_states:
                         c['h'] = np.zeros_like(layer.init_hidden_state)
+
+                        try:  # LSTM layer
+                            c['c'] = np.zeros_like(layer.init_cell_state)
+                        except AttributeError:  # non-LSTM rcurrent layer
+                            pass
                 except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
                     pass
             else:
@@ -67,9 +72,18 @@ class RMSprop(PlainTraining, RecurrentTraining):
                 c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (layer.weights_grad**2))
                 c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (layer.bias_grad**2))
 
+                # Update Weights and Bias
                 layer.weights += -(self._step_size / (np.sqrt(c['w']) + 1e-6)) * layer.weights_grad
                 layer.bias += -(self._step_size / (np.sqrt(c['b']) + 1e-6)) * layer.bias_grad
 
+                # Update Cell State
+                if layer.cell_state_grad is not None:
+                    c['c'] = \
+                        (self._beta * c['c']) + ((1 - self._beta) * (layer.cell_state_grad**2))
+                    layer.init_cell_state += -(self._step_size / (np.sqrt(c['c']) + 1e-6)) * \
+                        layer.cell_state_grad
+
+                # Update Hidden State
                 if layer.hidden_state_grad is not None:
                     c['h'] = \
                         (self._beta * c['h']) + ((1 - self._beta) * (layer.hidden_state_grad**2))

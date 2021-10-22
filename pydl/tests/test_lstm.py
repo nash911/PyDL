@@ -23,16 +23,23 @@ class TestLSTM(unittest.TestCase):
         self.delta = 1e-6
         tol = 8
 
-        def test(inp, num_neur, w, bias, seq_len, inp_grad, p=None, mask=None,
-                 architecture_type='many_to_many'):
+        def test(inp, num_neur, w, bias, seq_len, inp_grad, init_cell_state=None,
+                 init_hidden_state=None, p=None, mask=None, architecture_type='many_to_many'):
             if type(bias) == int:
                 bias = np.ones(4 * num_neur) * bias
             lstm = LSTM(inp, num_neur, w, bias, seq_len=seq_len, dropout=p,
+                        tune_internal_states=(False if init_hidden_state is None else True),
                         architecture_type=architecture_type)
+            if init_cell_state is not None:
+                lstm.init_cell_state = init_cell_state
+                lstm.init_hidden_state = init_hidden_state
+                lstm.reset_internal_states()
             _ = lstm.forward(inp, mask=mask)
             inputs_grad = lstm.backward(inp_grad)
             weights_grad = lstm.weights_grad
             bias_grad = lstm.bias_grad
+            cell_grad = lstm.cell_state_grad
+            hidden_grad = lstm.hidden_state_grad
 
             # Weights finite difference gradients
             weights_finite_diff = np.empty(weights_grad.shape)
@@ -91,9 +98,61 @@ class TestLSTM(unittest.TestCase):
                     inputs_finite_diff[i, j] = \
                         np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
 
+            if init_cell_state is not None:
+                # Initial cell state finite difference gradients
+                cell_finite_diff = np.empty(cell_grad.shape)
+                for i in range(init_cell_state.shape[0]):
+                    for j in range(init_cell_state.shape[1]):
+                        h_delta = np.zeros(init_cell_state.shape, dtype=conf.dtype)
+                        h_delta[i, j] = self.delta
+                        lstm.init_cell_state = init_cell_state + h_delta
+                        lstm.reset_internal_states()
+                        lhs = copy.deepcopy(lstm.forward(inp, mask=mask))
+                        lstm.init_cell_state = init_cell_state - h_delta
+                        lstm.reset_internal_states()
+                        rhs = copy.deepcopy(lstm.forward(inp, mask=mask))
+                        lhs_sum = np.zeros_like(list(lhs.values())[0])
+                        rhs_sum = np.zeros_like(list(rhs.values())[0])
+                        for k in list(lhs.keys()):
+                            if k > 0:
+                                lhs_sum += lhs[k] * inp_grad[k]
+                                rhs_sum += rhs[k] * inp_grad[k]
+                        cell_finite_diff[i, j] = \
+                            np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
+                lstm.init_cell_state = init_cell_state
+                lstm.reset_internal_states()
+
+            if init_hidden_state is not None:
+                # Initial hidden state finite difference gradients
+                hidden_finite_diff = np.empty(hidden_grad.shape)
+                for i in range(init_hidden_state.shape[0]):
+                    for j in range(init_hidden_state.shape[1]):
+                        h_delta = np.zeros(init_hidden_state.shape, dtype=conf.dtype)
+                        h_delta[i, j] = self.delta
+                        lstm.init_hidden_state = init_hidden_state + h_delta
+                        lstm.reset_internal_states()
+                        lhs = copy.deepcopy(lstm.forward(inp, mask=mask))
+                        lstm.init_hidden_state = init_hidden_state - h_delta
+                        lstm.reset_internal_states()
+                        rhs = copy.deepcopy(lstm.forward(inp, mask=mask))
+                        lhs_sum = np.zeros_like(list(lhs.values())[0])
+                        rhs_sum = np.zeros_like(list(rhs.values())[0])
+                        for k in list(lhs.keys()):
+                            if k > 0:
+                                lhs_sum += lhs[k] * inp_grad[k]
+                                rhs_sum += rhs[k] * inp_grad[k]
+                        hidden_finite_diff[i, j] = \
+                            np.sum(((lhs_sum - rhs_sum) / (2 * self.delta)), keepdims=False)
+                lstm.init_hidden_state = init_hidden_state
+                lstm.reset_internal_states()
+
             npt.assert_almost_equal(weights_grad, weights_finite_diff, decimal=tol)
             npt.assert_almost_equal(inputs_grad, inputs_finite_diff, decimal=tol)
             npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
+            if init_cell_state is not None:
+                npt.assert_almost_equal(cell_grad, cell_finite_diff, decimal=tol)
+            if init_hidden_state is not None:
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
 
             # # Weights gradient check
             # grad_diff = (abs(weights_grad - weights_finite_diff) /
@@ -119,12 +178,13 @@ class TestLSTM(unittest.TestCase):
         unit_inp_grad = [True, False]
         dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
+        tune_internal_states = [True, False]
         repeat = list(range(1))
 
-        for seq_len, r_size, feat, neur, b, oh, scl, unit, dout, a_type, r in \
+        for seq_len, r_size, feat, neur, b, oh, scl, unit, dout, a_type, tune, r in \
             list(itertools.product(sequence_length, reduce_size, feature_size, num_neurons, bias,
                                    one_hot, scale, unit_inp_grad, dropout, architecture_type,
-                                   repeat)):
+                                   tune_internal_states, repeat)):
 
             batch_size = seq_len - (r_size if seq_len > 1 else 0)
 
@@ -142,6 +202,8 @@ class TestLSTM(unittest.TestCase):
                 bias = np.random.rand(4 * neur) * scl
             else:
                 bias = b
+            init_c_state = np.random.rand(1, neur) if tune else None
+            init_h_state = np.random.rand(1, neur) if tune else None
 
             # Initialize input gradients
             inp_grad = OrderedDict()
@@ -161,7 +223,7 @@ class TestLSTM(unittest.TestCase):
                 p = None
                 mask = None
 
-            test(X, neur, w, bias, seq_len, inp_grad, p, mask, a_type)
+            test(X, neur, w, bias, seq_len, inp_grad, init_c_state, init_h_state, p, mask, a_type)
 
 
 if __name__ == '__main__':

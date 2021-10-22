@@ -36,7 +36,14 @@ class Adam(PlainTraining, RecurrentTraining):
 
                 try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
                     if layer.tune_internal_states:
+                        m['h'] = np.zeros_like(layer.init_hidden_state)
                         v['h'] = np.zeros_like(layer.init_hidden_state)
+
+                        try:  # LSTM layer
+                            m['c'] = np.zeros_like(layer.init_cell_state)
+                            v['c'] = np.zeros_like(layer.init_cell_state)
+                        except AttributeError:  # non-LSTM rcurrent layer
+                            pass
                 except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
                     pass
             else:
@@ -74,6 +81,9 @@ class Adam(PlainTraining, RecurrentTraining):
                 # First order moment update
                 m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * layer.weights_grad)
                 m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * layer.bias_grad)
+                if layer.cell_state_grad is not None:
+                    m['c'] = \
+                        (self._beta_1 * m['c']) + ((1 - self._beta_1) * layer.cell_state_grad)
                 if layer.hidden_state_grad is not None:
                     m['h'] = \
                         (self._beta_1 * m['h']) + ((1 - self._beta_1) * layer.hidden_state_grad)
@@ -81,6 +91,9 @@ class Adam(PlainTraining, RecurrentTraining):
                 # Second order moment update
                 v['w'] = (self._beta_2 * v['w']) + ((1 - self._beta_2) * (layer.weights_grad**2))
                 v['b'] = (self._beta_2 * v['b']) + ((1 - self._beta_2) * (layer.bias_grad**2))
+                if layer.cell_state_grad is not None:
+                    v['c'] = (self._beta_2 * v['c']) + \
+                             ((1 - self._beta_2) * (layer.cell_state_grad**2))
                 if layer.hidden_state_grad is not None:
                     v['h'] = (self._beta_2 * v['h']) + \
                              ((1 - self._beta_2) * (layer.hidden_state_grad**2))
@@ -94,6 +107,13 @@ class Adam(PlainTraining, RecurrentTraining):
                 m_hat_b = m['b'] / (1.0 - self._beta_1**t)
                 v_hat_b = v['b'] / (1.0 - self._beta_2**t)
                 layer.bias += -(self._step_size * m_hat_b) / (np.sqrt(v_hat_b) + 1e-8)
+
+                # Update Cell State
+                if layer.cell_state_grad is not None:
+                    m_hat_c = m['c'] / (1.0 - self._beta_1**t)
+                    v_hat_c = v['c'] / (1.0 - self._beta_2**t)
+                    layer.init_cell_state += \
+                        -(self._step_size * m_hat_c) / (np.sqrt(v_hat_c) + 1e-8)
 
                 # Update Hidden State
                 if layer.hidden_state_grad is not None:

@@ -22,13 +22,16 @@ class LSTM(Layer):
     """The LSTM Layer Class."""
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, seq_len=None, xavier=True,
-                 weight_scale=1.0, architecture_type='many_to_many', dropout=None, name=None):
+                 weight_scale=1.0, architecture_type='many_to_many', dropout=None,
+                 tune_internal_states=False, name=None):
         super().__init__(name=name)
         self._weights = OrderedDict()
         self._inputs = OrderedDict()
         self._cell_state = OrderedDict()
         self._hidden_state = OrderedDict()
         self._output = OrderedDict()
+        self._init_cell_state = None
+        self._init_hidden_state = None
 
         self._weights_grad = OrderedDict()
         self._out_grad = OrderedDict()
@@ -46,6 +49,8 @@ class LSTM(Layer):
         self._weight_scale = weight_scale
         self._xavier = xavier
         self._has_bias = True if type(bias) in [np.ndarray, float, int] else bias
+        self._tune_internal_states = tune_internal_states
+        self._update_init_internal_states = True
 
         # Initialize Weights
         if weights is not None:
@@ -79,14 +84,20 @@ class LSTM(Layer):
         self._o_gate = [Sigmoid() for _ in range(self._seq_len + 1)]
         self._g_gate = [Tanh() for _ in range(self._seq_len + 1)]
 
-        # Initialize Cell state
-        self._cell_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
-
         # Cell state activation function
         self._cell_state_activation_fn = [Tanh() for _ in range(self._seq_len + 1)]
 
+        # Initialize Cell state
+        self._init_cell_state = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._cell_state[0] = self._init_cell_state
+
         # Initialize Hidden state
-        self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        self._init_hidden_state = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+        if self._tune_internal_states:
+            self._hidden_state[0] = self._o_gate[0].forward(self._init_hidden_state) * \
+                self._cell_state_activation_fn[0].forward(self._cell_state[0])
+        else:
+            self._hidden_state[0] = self._init_hidden_state
 
         self.reset_gradients()
 
@@ -108,6 +119,14 @@ class LSTM(Layer):
         return self._seq_len
 
     @property
+    def init_cell_state(self):
+        return self._init_cell_state
+
+    @property
+    def init_hidden_state(self):
+        return self._init_hidden_state
+
+    @property
     def shape(self):
         return (None, self._num_neurons)
 
@@ -118,6 +137,22 @@ class LSTM(Layer):
     @property
     def num_neurons(self):
         return self._num_neurons
+
+    @property
+    def tune_internal_states(self):
+        return self._tune_internal_states
+
+    # Setters
+    # -------
+    @init_cell_state.setter
+    def init_cell_state(self, c):
+        assert(c.shape == self._init_cell_state.shape)
+        np.copyto(self._init_cell_state, c)
+
+    @init_hidden_state.setter
+    def init_hidden_state(self, h):
+        assert(h.shape == self._init_hidden_state.shape)
+        np.copyto(self._init_hidden_state, h)
 
     def reinitialize_weights(self, inputs=None, num_neurons=None):
         num_feat = self._inp_size if inputs is None else np.prod(inputs.shape[1:])
@@ -146,6 +181,8 @@ class LSTM(Layer):
     def reset_gradients(self):
         self._weights_grad = np.zeros_like(self._weights)
         self._bias_grad = np.zeros_like(self._bias)
+        self._cell_state_grad = None
+        self._hidden_state_grad = None
         self._out_grad = OrderedDict()
 
     def score_fn(self, inputs, weights=None):
@@ -317,6 +354,26 @@ class LSTM(Layer):
             # d(ifog)/dx: Grads of the layer's i.f.o.g gates w.r.t the inputs 'X' [h_(t-1), h_(l-1)]
             hidden_grad, self._out_grad[t] = self.input_gradients(concat_grads)
 
+        if self._tune_internal_states and self._update_init_internal_states:
+            o_out = self._o_gate[0].output
+            cell_state_tanh = self._cell_state_activation_fn[0].output
+
+            # Gradients of the initial cell state (c_0)
+            if len(cell_grad.shape) == 1:
+                cell_grad = np.expand_dims(cell_grad, axis=0)
+            self._cell_state_grad = \
+                self._cell_state_activation_fn[0].backward(o_out * hidden_grad) + cell_grad
+
+            # Gradients of the initial hidden state (h_0)
+            if len(hidden_grad.shape) == 1:
+                hidden_grad = np.expand_dims(hidden_grad, axis=0)
+            self._hidden_state_grad = self._o_gate[0].backward(cell_state_tanh * hidden_grad)
+
+            self._update_init_internal_states = False
+        else:
+            self._cell_state_grad = None
+            self._hidden_state_grad = None
+
         return self._out_grad
 
     def update_weights(self, alpha):
@@ -352,11 +409,17 @@ class LSTM(Layer):
         self._output = OrderedDict()
 
         if cell_state is None:
-            self._cell_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+            self._cell_state[0] = self._init_cell_state
+            self._update_init_internal_states = True
         else:
             self._cell_state[0] = cell_state
 
         if hidden_state is None:
-            self._hidden_state[0] = np.zeros((1, self.num_neurons), dtype=conf.dtype)
+            if self._tune_internal_states:
+                self._hidden_state[0] = self._o_gate[0].forward(self._init_hidden_state) * \
+                    self._cell_state_activation_fn[0].forward(self._cell_state[0])
+                self._update_init_internal_states = True
+            else:
+                self._hidden_state[0] = self._init_hidden_state
         else:
             self._hidden_state[0] = hidden_state

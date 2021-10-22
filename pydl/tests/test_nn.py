@@ -554,9 +554,13 @@ class TestNN(unittest.TestCase):
 
         w = layer.weights
         bias = layer.bias
+        init_cell_state = np.copy(layer.init_cell_state)
+        init_hidden_state = np.copy(layer.init_hidden_state)
 
         weights_grad = layer.weights_grad
         bias_grad = layer.bias_grad
+        cell_grad = layer.cell_state_grad
+        hidden_grad = layer.hidden_state_grad
 
         # Weights finite difference gradients
         weights_finite_diff = np.empty(weights_grad.shape)
@@ -592,6 +596,50 @@ class TestNN(unittest.TestCase):
             print("AssertionError Bias: ", layer.name)
             npt.assert_almost_equal(bias_grad, bias_finite_diff, decimal=tol)
         layer.bias = bias
+
+        if layer.tune_internal_states:
+            # Initial cell state finite difference gradients
+            cell_finite_diff = np.empty(cell_grad.shape)
+            for i in range(cell_grad.shape[0]):
+                for j in range(cell_grad.shape[1]):
+                    h_delta = np.zeros_like(init_cell_state)
+                    h_delta[i, j] = delta
+                    layer.init_cell_state = init_cell_state + h_delta
+                    layer.reset_internal_states()
+                    lhs = nn.forward(inp)
+                    layer.init_cell_state = init_cell_state - h_delta
+                    layer.reset_internal_states()
+                    rhs = nn.forward(inp)
+                    cell_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+            try:
+                npt.assert_almost_equal(cell_grad, cell_finite_diff, decimal=tol)
+            except AssertionError:
+                print("AssertionError Initial Cell State: ", layer.name)
+                npt.assert_almost_equal(cell_grad, cell_finite_diff, decimal=tol)
+            layer.init_cell_state = init_cell_state
+            layer.reset_internal_states()
+
+        if layer.tune_internal_states:
+            # Initial hidden state finite difference gradients
+            hidden_finite_diff = np.empty(hidden_grad.shape)
+            for i in range(hidden_grad.shape[0]):
+                for j in range(hidden_grad.shape[1]):
+                    h_delta = np.zeros_like(init_hidden_state)
+                    h_delta[i, j] = delta
+                    layer.init_hidden_state = init_hidden_state + h_delta
+                    layer.reset_internal_states()
+                    lhs = nn.forward(inp)
+                    layer.init_hidden_state = init_hidden_state - h_delta
+                    layer.reset_internal_states()
+                    rhs = nn.forward(inp)
+                    hidden_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+            try:
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+            except AssertionError:
+                print("AssertionError Initial Hidden State: ", layer.name)
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+            layer.init_hidden_state = init_hidden_state
+            layer.reset_internal_states()
 
     def inputs_1D_grad_test(self, nn, inp, inp_grad, inputs_grad, delta):
         if type(inputs_grad) is OrderedDict:
@@ -1283,7 +1331,6 @@ class TestNN(unittest.TestCase):
             nn = NN(inp, layers)
             nn_out = nn.forward(inp)
             inp_grad = np.random.uniform(-1, 1, nn_out.shape)
-            # inp_grad = np.ones_like(inp_grad)
             inputs_grad = nn.backward(inp_grad)
 
             for layer in layers:
@@ -1298,10 +1345,12 @@ class TestNN(unittest.TestCase):
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
         architecture_type = ['many_to_many', 'many_to_one']
+        tune_internal_states = [True, False]
         reduce_size = [0, 5]
         scl = 0.1
 
-        for a_type, r_size in list(itertools.product(architecture_type, reduce_size)):
+        for a_type, tune, r_size in list(itertools.product(architecture_type, tune_internal_states,
+                                                           reduce_size)):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
@@ -1312,6 +1361,8 @@ class TestNN(unittest.TestCase):
             X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
             w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * scl
             b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
+            init_c = np.random.randn(1, num_neurons_lstm) * scl
+            init_h = np.random.randn(1, num_neurons_lstm) * scl
 
             # Layer 2
             num_neurons_fc = 16
@@ -1322,9 +1373,13 @@ class TestNN(unittest.TestCase):
             # -----------------
             dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
-                      name='LSTM-1')
+                      tune_internal_states=tune, name='LSTM-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_cell_state = init_c
+                l1.init_hidden_state = init_h
+                l1.reset_internal_states()
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
@@ -1342,6 +1397,8 @@ class TestNN(unittest.TestCase):
             X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
             w_1 = np.random.randn((num_neurons_lstm + X.shape[-1]), (4 * num_neurons_lstm)) * scl
             b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
+            init_c = np.random.randn(1, num_neurons_lstm) * scl
+            init_h = np.random.randn(1, num_neurons_lstm) * scl
 
             # Layer 2
             num_neurons_fc = 10
@@ -1352,9 +1409,13 @@ class TestNN(unittest.TestCase):
             # -----------------
             dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm, w_1, b_1, seq_len, architecture_type=a_type, dropout=dp1,
-                      name='LSTM-1')
+                      tune_internal_states=tune, name='LSTM-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_cell_state = init_c
+                l1.init_hidden_state = init_h
+                l1.reset_internal_states()
 
             l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
 
@@ -1377,6 +1438,8 @@ class TestNN(unittest.TestCase):
             w_2 = \
                 np.random.randn((num_neurons_lstm + num_neurons_fc), (4 * num_neurons_lstm)) * scl
             b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm)) * scl
+            init_c = np.random.randn(1, num_neurons_lstm) * scl
+            init_h = np.random.randn(1, num_neurons_lstm) * scl
 
             # Layer 3
             num_neurons_fc_out = 20
@@ -1392,9 +1455,13 @@ class TestNN(unittest.TestCase):
 
             dp2 = np.random.rand()
             l2 = LSTM(l1, num_neurons_lstm, w_2, b_2, seq_len, architecture_type=a_type,
-                      dropout=dp2, name='LSTM-2')
+                      dropout=dp2, tune_internal_states=tune, name='LSTM-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neurons_lstm) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
+            if tune:
+                l2.init_cell_state = init_c
+                l2.init_hidden_state = init_h
+                l2.reset_internal_states()
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 
@@ -1412,12 +1479,16 @@ class TestNN(unittest.TestCase):
             w_1 = \
                 np.random.randn((num_neurons_lstm_1 + X.shape[-1]), (4 * num_neurons_lstm_1)) * scl
             b_1 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_1)) * scl
+            init_c_1 = np.random.randn(1, num_neurons_lstm_1) * scl
+            init_h_1 = np.random.randn(1, num_neurons_lstm_1) * scl
 
             # Layer 2
             num_neurons_lstm_2 = 31
             w_2 = np.random.randn((num_neurons_lstm_2 + num_neurons_lstm_1),
                                   (4 * num_neurons_lstm_2)) * scl
             b_2 = np.random.uniform(-1, 1, (4 * num_neurons_lstm_2)) * scl
+            init_c_2 = np.random.randn(1, num_neurons_lstm_2) * scl
+            init_h_2 = np.random.randn(1, num_neurons_lstm_2) * scl
 
             # Layer 3
             num_neurons_fc_out = 24
@@ -1428,17 +1499,25 @@ class TestNN(unittest.TestCase):
             # -----------------
             dp1 = np.random.rand()
             l1 = LSTM(X, num_neurons_lstm_1, w_1, b_1, seq_len, architecture_type='many_to_many',
-                      dropout=dp1, name='LSTM-1')
+                      dropout=dp1, tune_internal_states=tune, name='LSTM-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neurons_lstm_1) < dp1,
                                dtype=conf.dtype)
             l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_cell_state = init_c_1
+                l1.init_hidden_state = init_h_1
+                l1.reset_internal_states()
 
             dp2 = np.random.rand()
             l2 = LSTM(l1, num_neurons_lstm_2, w_2, b_2, seq_len, architecture_type=a_type,
-                      dropout=dp2, name='LSTM-2')
+                      dropout=dp2, tune_internal_states=tune, name='LSTM-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neurons_lstm_2) < dp2,
                                dtype=conf.dtype)
             l2.dropout_mask = mask_l2
+            if tune:
+                l2.init_cell_state = init_c_2
+                l2.init_hidden_state = init_h_2
+                l2.reset_internal_states()
 
             l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
 

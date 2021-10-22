@@ -48,6 +48,10 @@ class SGD(PlainTraining, RecurrentTraining):
                 if layer.bias is not None:
                     layer.bias += -self._step_size * layer.bias_grad
 
+                # Update Cell State
+                if layer.cell_state_grad is not None:
+                    layer.init_cell_state += -self._step_size * layer.cell_state_grad
+
                 # Update Hidden State
                 if layer.hidden_state_grad is not None:
                     layer.init_hidden_state += -self._step_size * layer.hidden_state_grad
