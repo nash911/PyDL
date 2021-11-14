@@ -15,6 +15,8 @@ from pydl.nn.nn import NN
 from pydl.training.sgd import SGD
 from pydl import conf
 
+np.random.seed(11421111)
+
 
 def get_data(file_path, seq_len):
     data = open(file_path, 'r').read()
@@ -35,7 +37,7 @@ def main():
     print("K: ", K)
 
     l1 = RNN(X, num_neurons=200, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
-             activation_fn='Sigmoid', name="RNN-1")
+             activation_fn='Sigmoid', tune_internal_states=True, name="RNN-1")
     l2 = FC(l1, num_neurons=K, bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='SoftMax', name="Output-Layer")
     layers = [l1, l2]
@@ -44,7 +46,7 @@ def main():
 
     sgd = SGD(nn, step_size=1e-1, reg_lambda=0, train_size=90, test_size=10)
     sgd.train_recurrent(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
-                        log_freq=1, plot='Character-RNN - SGD')
+                        log_freq=1, plot='Character-RNN - SGD - Tune Hidden')
 
     input("Press Enter to continue...")
 

@@ -12,8 +12,10 @@ import numpy as np
 from pydl.nn.layers import FC
 from pydl.nn.lstm import LSTM
 from pydl.nn.nn import NN
-from pydl.training.sgd import SGD
+from pydl.training.rmsprop import RMSprop
 from pydl import conf
+
+np.random.seed(11421111)
 
 
 def get_data(file_path, seq_len):
@@ -26,7 +28,7 @@ def get_data(file_path, seq_len):
 
 
 def main():
-    seq_len = 100
+    seq_len = 50
     weight_scale = 1e-2
 
     data, X, K = get_data('data/paulgraham_essays.txt', seq_len)
@@ -35,16 +37,16 @@ def main():
     print("K: ", K)
 
     l1 = LSTM(X, num_neurons=200, bias=True, seq_len=seq_len, weight_scale=weight_scale,
-              xavier=True, name="LSTM-1")
+              xavier=True, tune_internal_states=True, name="LSTM-1")
     l2 = FC(l1, num_neurons=K, bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='SoftMax', name="Output-Layer")
     layers = [l1, l2]
 
     nn = NN(None, layers)
 
-    sgd = SGD(nn, step_size=1e-1, reg_lambda=0, train_size=90, test_size=10)
-    sgd.train_recurrent(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
-                        log_freq=1, plot='Character-LSTM - SGD')
+    rms = RMSprop(nn, step_size=1e-3, beta=0.9, reg_lambda=0, train_size=90, test_size=10)
+    rms.train_recurrent(data, batch_size=seq_len, epochs=10000, sample_length=1000, temperature=0.5,
+                        log_freq=1, plot='Character-LSTM - RMSprop - Tune Hidden')
 
     input("Press Enter to continue...")
 

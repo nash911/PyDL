@@ -16,6 +16,8 @@ from pydl.nn.nn import NN
 from pydl.training.momentum import Momentum
 from pydl import conf
 
+np.random.seed(11421111)
+
 
 def generate_sine_data():
     T = 20
@@ -45,7 +47,7 @@ def main():
     plt.close()
 
     l1 = LSTM(X, num_neurons=5, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
-              name="LSTM-1")
+              tune_internal_states=True, name="LSTM-1")
     l2 = FC(l1, num_neurons=X.shape[-1], bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='Linear', name="Output-Layer")
     layers = [l1, l2]
@@ -54,7 +56,7 @@ def main():
 
     momentum = Momentum(nn, step_size=1e-2, mu=0.5, reg_lambda=0, train_size=90, test_size=10,
                         regression=True)
-    momentum.train_recurrent(X, batch_size=seq_len, epochs=200, sample_length=1000, log_freq=1,
+    momentum.train_recurrent(X, batch_size=seq_len, epochs=100, sample_length=1000, log_freq=1,
                              fit_test_data=True, plot='Sinusoid-LSTM - Momentum')
 
     input("Press Enter to continue...")
