@@ -422,7 +422,7 @@ class GRU(Layer):
             cand_grad = self._candidate_activation_fn[t].backward((1.0 - z_out) * grad)
 
             # Reset gate gradients (r'ₜ):
-            # r'ₜ = σ'((∂h̃ₜ/∂rₜ) * gₜ) = σ'((U ⊙ hₜ-₁) * h̃'ₜ)
+            # r'ₜ = σ'((∂h̃ₜ/∂rₜ) * gₜ) = σ'((hᵀ₍ₜ-₁₎∙Uᵀ) * h̃'ₜ)
             r_input_grad = np.sum((self._weights['candidate'][:self._num_neurons, :] *
                                    self._hidden_state[t - 1].reshape(-1, 1) * cand_grad), axis=-1,
                                   keepdims=False)
