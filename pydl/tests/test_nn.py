@@ -19,8 +19,11 @@ from pydl.nn.pool import Pool
 from pydl.nn.residual_block import ResidualBlock
 from pydl.nn.rnn import RNN
 from pydl.nn.lstm import LSTM
+from pydl.nn.gru import GRU
 from pydl.nn.nn import NN
 from pydl import conf
+
+np.random.seed(11421111)
 
 
 class TestNN(unittest.TestCase):
@@ -618,6 +621,115 @@ class TestNN(unittest.TestCase):
                 npt.assert_almost_equal(cell_grad, cell_finite_diff, decimal=tol)
             layer.init_cell_state = init_cell_state
             layer.reset_internal_states()
+
+        if layer.tune_internal_states:
+            # Initial hidden state finite difference gradients
+            hidden_finite_diff = np.empty(hidden_grad.shape)
+            for i in range(hidden_grad.shape[0]):
+                for j in range(hidden_grad.shape[1]):
+                    h_delta = np.zeros_like(init_hidden_state)
+                    h_delta[i, j] = delta
+                    layer.init_hidden_state = init_hidden_state + h_delta
+                    layer.reset_internal_states()
+                    lhs = nn.forward(inp)
+                    layer.init_hidden_state = init_hidden_state - h_delta
+                    layer.reset_internal_states()
+                    rhs = nn.forward(inp)
+                    hidden_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+            try:
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+            except AssertionError:
+                print("AssertionError Initial Hidden State: ", layer.name)
+                npt.assert_almost_equal(hidden_grad, hidden_finite_diff, decimal=tol)
+            layer.init_hidden_state = init_hidden_state
+            layer.reset_internal_states()
+
+    def gru_layer_grads_test(self, nn, layer, inp, inp_grad, delta):
+        tol = 7
+
+        gates_w = layer.gates_weights
+        candidate_w = layer.candidate_weights
+        gates_b = layer.gates_bias
+        candidate_b = layer.candidate_bias
+        init_hidden_state = np.copy(layer.init_hidden_state)
+
+        gates_weights_grad = layer.gates_weights_grad
+        candidate_weights_grad = layer.candidate_weights_grad
+        gates_bias_grad = layer.gates_bias_grad
+        candidate_bias_grad = layer.candidate_bias_grad
+        hidden_grad = layer.hidden_state_grad
+
+        # Gates weights finite difference gradients
+        gates_weights_finite_diff = np.empty(gates_weights_grad.shape)
+        for i in range(gates_weights_grad.shape[0]):
+            for j in range(gates_weights_grad.shape[1]):
+                w_delta = np.zeros_like(gates_w)
+                w_delta[i, j] = delta
+                layer.gates_weights = gates_w + w_delta
+                lhs = nn.forward(inp)
+                layer.gates_weights = gates_w - w_delta
+                rhs = nn.forward(inp)
+                gates_weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(gates_weights_grad, gates_weights_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Gates Weights: ", layer.name)
+            npt.assert_almost_equal(gates_weights_grad, gates_weights_finite_diff, decimal=tol)
+        layer.gates_weights = gates_w
+
+        # Candidate weights finite difference gradients
+        candidate_weights_finite_diff = np.empty(candidate_weights_grad.shape)
+        for i in range(candidate_weights_grad.shape[0]):
+            for j in range(candidate_weights_grad.shape[1]):
+                w_delta = np.zeros_like(candidate_w)
+                w_delta[i, j] = delta
+                layer.candidate_weights = candidate_w + w_delta
+                lhs = nn.forward(inp)
+                layer.candidate_weights = candidate_w - w_delta
+                rhs = nn.forward(inp)
+                candidate_weights_finite_diff[i, j] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(candidate_weights_grad, candidate_weights_finite_diff,
+                                    decimal=tol)
+        except AssertionError:
+            print("AssertionError Candidate Weights: ", layer.name)
+            npt.assert_almost_equal(candidate_weights_grad, candidate_weights_finite_diff,
+                                    decimal=tol)
+        layer.candidate_weights = candidate_w
+
+        # Gates bias finite difference gradients
+        gates_bias_finite_diff = np.empty(gates_bias_grad.shape)
+        for i in range(gates_bias_grad.shape[0]):
+            b_delta = np.zeros_like(gates_b)
+            b_delta[i] = delta
+            layer.gates_bias = gates_b + b_delta
+            lhs = nn.forward(inp)
+            layer.gates_bias = gates_b - b_delta
+            rhs = nn.forward(inp)
+            gates_bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(gates_bias_grad, gates_bias_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Gates Bias: ", layer.name)
+            npt.assert_almost_equal(gates_bias_grad, gates_bias_finite_diff, decimal=tol)
+        layer.gates_bias = gates_b
+
+        # Candidate bias finite difference gradients
+        candidate_bias_finite_diff = np.empty(candidate_bias_grad.shape)
+        for i in range(candidate_bias_grad.shape[0]):
+            b_delta = np.zeros_like(candidate_b)
+            b_delta[i] = delta
+            layer.candidate_bias = candidate_b + b_delta
+            lhs = nn.forward(inp)
+            layer.candidate_bias = candidate_b - b_delta
+            rhs = nn.forward(inp)
+            candidate_bias_finite_diff[i] = np.sum(((lhs - rhs) / (2 * delta)) * inp_grad)
+        try:
+            npt.assert_almost_equal(candidate_bias_grad, candidate_bias_finite_diff, decimal=tol)
+        except AssertionError:
+            print("AssertionError Candidate Bias: ", layer.name)
+            npt.assert_almost_equal(candidate_bias_grad, candidate_bias_finite_diff, decimal=tol)
+        layer.candidate_bias = candidate_b
 
         if layer.tune_internal_states:
             # Initial hidden state finite difference gradients
@@ -1516,6 +1628,213 @@ class TestNN(unittest.TestCase):
             l2.dropout_mask = mask_l2
             if tune:
                 l2.init_cell_state = init_c_2
+                l2.init_hidden_state = init_h_2
+                l2.reset_internal_states()
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
+
+    def test_backward_GRU(self):
+        self.delta = 1e-6
+
+        def test(inp, layers):
+            nn = NN(inp, layers)
+            nn_out = nn.forward(inp)
+            inp_grad = np.random.uniform(-1, 1, nn_out.shape)
+            inputs_grad = nn.backward(inp_grad)
+
+            for layer in layers:
+                if layer.type == 'FC_Layer':
+                    self.fc_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+                elif layer.type == 'GRU_Layer':
+                    self.gru_layer_grads_test(nn, layer, inp, inp_grad, self.delta)
+
+            # Inputs finite difference gradients
+            self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
+
+        architecture_type = ['many_to_many', 'many_to_one']
+        tune_internal_states = [True, False]
+        reduce_size = [0, 3]
+        scl = 0.1
+
+        for a_type, tune, r_size in list(itertools.product(architecture_type, tune_internal_states,
+                                                           reduce_size)):
+            # Case-1 - Continuous Inputs
+            # --------------------------
+            # Layer 1
+            seq_len = 10
+            batch_size = seq_len - r_size
+            inp_feat_size = 25
+            num_neur_gru = 15
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = OrderedDict()
+            w_1['gates'] = np.random.randn((num_neur_gru + X.shape[-1]), (2 * num_neur_gru)) * scl
+            w_1['candidate'] = np.random.randn((num_neur_gru + X.shape[-1]), num_neur_gru) * scl
+            b_1 = OrderedDict()
+            b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            b_1['candidate'] = np.random.rand(num_neur_gru) * scl
+            init_h = np.random.rand(1, num_neur_gru) * scl
+
+            # Layer 2
+            num_neurons_fc = 20
+            w_2 = np.random.randn(num_neur_gru, num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
+
+            # GRU Architecture
+            # ----------------
+            dp1 = np.random.rand()
+            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
+                     architecture_type=a_type, name='GRU-1')
+            mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_hidden_state = init_h
+                l1.reset_internal_states()
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-2- OneHot Inputs
+            # ---------------------
+            # Layer 1
+            seq_len = 11
+            batch_size = seq_len - r_size
+            inp_feat_size = 13
+            num_neur_gru = 24
+            X = np.zeros((batch_size, inp_feat_size), dtype=conf.dtype)
+            X[range(batch_size), np.random.randint(inp_feat_size, size=batch_size)] = 1
+            w_1 = OrderedDict()
+            w_1['gates'] = np.random.randn((num_neur_gru + X.shape[-1]), (2 * num_neur_gru)) * scl
+            w_1['candidate'] = np.random.randn((num_neur_gru + X.shape[-1]), num_neur_gru) * scl
+            b_1 = OrderedDict()
+            b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            b_1['candidate'] = np.random.rand(num_neur_gru) * scl
+            init_h = np.random.rand(1, num_neur_gru) * scl
+
+            # Layer 2
+            num_neurons_fc = 10
+            w_2 = np.random.randn(num_neur_gru, num_neurons_fc) * scl
+            b_2 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
+
+            # GRU Architecture
+            # ----------------
+            dp1 = np.random.rand()
+            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
+                     architecture_type=a_type, name='GRU-1')
+            mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_hidden_state = init_h
+                l1.reset_internal_states()
+
+            l2 = FC(l1, w_2.shape[-1], w_2, b_2, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2]
+            test(X, layers)
+
+            # Case-3 - Sandwitched Layers - FC - GRU - FC
+            # -------------------------------------------
+            # Layer 1
+            seq_len = 9
+            batch_size = seq_len - r_size
+            inp_feat_size = 25
+            num_neurons_fc = 30
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = np.random.randn(X.shape[-1], num_neurons_fc) * scl
+            b_1 = np.random.uniform(-1, 1, (num_neurons_fc)) * scl
+
+            # Layer 2
+            num_neur_gru = 15
+            w_2 = OrderedDict()
+            w_2['gates'] = \
+                np.random.randn((num_neur_gru + num_neurons_fc), (2 * num_neur_gru)) * scl
+            w_2['candidate'] = np.random.randn((num_neur_gru + num_neurons_fc), num_neur_gru) * scl
+            b_2 = OrderedDict()
+            b_2['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            b_2['candidate'] = np.random.rand(num_neur_gru) * scl
+            init_h = np.random.rand(1, num_neur_gru) * scl
+
+            # Layer 3
+            num_neurons_fc_out = 20
+            w_3 = np.random.randn(num_neur_gru, num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
+
+            # GRU Architecture
+            # ----------------
+            dp1 = np.random.rand()
+            l1 = FC(X, num_neurons_fc, w_1, b_1, activation_fn='ReLU', dropout=dp1, name='FC-1')
+            mask_l1 = np.array(np.random.rand(batch_size, num_neurons_fc) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+
+            dp2 = np.random.rand()
+            l2 = GRU(l1, num_neur_gru, w_2, b_2, seq_len, dropout=dp2, tune_internal_states=tune,
+                     architecture_type=a_type, name='GRU-2')
+            mask_l2 = np.array(np.random.rand(batch_size, num_neur_gru) < dp2, dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
+            if tune:
+                l2.init_hidden_state = init_h
+                l2.reset_internal_states()
+
+            l3 = FC(l2, w_3.shape[-1], w_3, b_3, activation_fn='SoftMax', name='FC-Out')
+
+            layers = [l1, l2, l3]
+            test(X, layers)
+
+            # Case-4 - Sandwitched Layers - GRU - GRU - FC
+            # --------------------------------------------
+            # Layer 1
+            seq_len = 8
+            batch_size = seq_len - r_size
+            inp_feat_size = 17
+            num_neur_gru_1 = 11
+            X = np.random.uniform(-1, 1, (batch_size, inp_feat_size)) * scl
+            w_1 = OrderedDict()
+            w_1['gates'] = \
+                np.random.randn((num_neur_gru_1 + X.shape[-1]), (2 * num_neur_gru_1)) * scl
+            w_1['candidate'] = np.random.randn((num_neur_gru_1 + X.shape[-1]), num_neur_gru_1) * scl
+            b_1 = OrderedDict()
+            b_1['gates'] = np.random.rand(2 * num_neur_gru_1) * scl
+            b_1['candidate'] = np.random.rand(num_neur_gru_1) * scl
+            init_h_1 = np.random.rand(1, num_neur_gru_1) * scl
+
+            # Layer 2
+            num_neur_gru_2 = 31
+            w_2 = OrderedDict()
+            w_2['gates'] = \
+                np.random.randn((num_neur_gru_2 + num_neur_gru_1), (2 * num_neur_gru_2)) * scl
+            w_2['candidate'] = \
+                np.random.randn((num_neur_gru_2 + num_neur_gru_1), num_neur_gru_2) * scl
+            b_2 = OrderedDict()
+            b_2['gates'] = np.random.rand(2 * num_neur_gru_2) * scl
+            b_2['candidate'] = np.random.rand(num_neur_gru_2) * scl
+            init_h_2 = np.random.rand(1, num_neur_gru_2) * scl
+
+            # Layer 3
+            num_neurons_fc_out = 24
+            w_3 = np.random.randn(num_neur_gru_2, num_neurons_fc_out) * scl
+            b_3 = np.random.uniform(-1, 1, (num_neurons_fc_out)) * scl
+
+            # GRU Architecture
+            # ----------------
+            dp1 = np.random.rand()
+            l1 = GRU(X, num_neur_gru_1, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
+                     architecture_type='many_to_many', name='GRU-1')
+            mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru_1) < dp1, dtype=conf.dtype)
+            l1.dropout_mask = mask_l1
+            if tune:
+                l1.init_hidden_state = init_h_1
+                l1.reset_internal_states()
+
+            dp2 = np.random.rand()
+            l2 = GRU(l1, num_neur_gru_2, w_2, b_2, seq_len, dropout=dp2, tune_internal_states=tune,
+                     architecture_type=a_type, name='GRU-2')
+            mask_l2 = np.array(np.random.rand(batch_size, num_neur_gru_2) < dp2, dtype=conf.dtype)
+            l2.dropout_mask = mask_l2
+            if tune:
                 l2.init_hidden_state = init_h_2
                 l2.reset_internal_states()
 

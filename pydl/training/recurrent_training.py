@@ -17,7 +17,7 @@ from pydl import conf
 
 
 class RecurrentTraining(Training):
-    """Class for training recurrent NN architectures like RNN and LSTM.
+    """Class for training recurrent NN architectures like RNN, LSTM, and GRU.
 
     Args:
         name (str): Name of the training algorithm.
@@ -31,7 +31,7 @@ class RecurrentTraining(Training):
 
     def reset_recurrent_layers(self, hidden_state=None):
         for layer in self._nn.layers:
-            if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                 layer.reset_internal_states(hidden_state)
 
     def fit_test_data(self, X, fig, axs, batch_size=None, inference=True):
@@ -143,7 +143,7 @@ class RecurrentTraining(Training):
 
             # Forward propagate throug the network
             for layer in self._nn.layers:
-                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                     if n == 0:
                         # Reset hidden state at the beginning of sequence generation
                         layer.reset_internal_states()
@@ -165,7 +165,7 @@ class RecurrentTraining(Training):
         sampled_data = [input]
         for n in range(sample_length):
             for layer in self._nn.layers:
-                if layer.type in ['RNN_Layer', 'LSTM_Layer']:
+                if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                     input = np.copy(layer.forward(input, inference=True)[1])
                     # Set previous hidden state (h_t-1) to current hidden state output (h_t)
                     layer.reset_internal_states('previous_state')

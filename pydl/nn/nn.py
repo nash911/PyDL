@@ -44,7 +44,7 @@ class NN:
         layer_inp = inputs
         for layer in self._layers:
             layer_out = layer.forward(layer_inp, inference=inference)
-            if type(layer_out) is OrderedDict:  # If the current layer is RNN/LSTM
+            if type(layer_out) is OrderedDict:  # If the current layer is RNN/LSTM/GRU
                 # Stack layer outputs as dicts into a numpy array
                 if layer.architecture_type == 'many_to_many':
                     seq_len = len(layer_out)
@@ -62,7 +62,7 @@ class NN:
 
         layer_inp_grad = inp_grad
         for layer in reversed(self._layers):
-            if layer.type in ['RNN_Layer', 'LSTM_Layer'] and \
+            if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer'] and \
                type(layer_inp_grad) is not OrderedDict:
                 # If the current layer is RNN, while the previous layer was not
                 inp_grad_dict = OrderedDict()
@@ -72,7 +72,7 @@ class NN:
                 else:  # 'many_to_one'
                     inp_grad_dict[list(layer.output.keys())[-1]] = layer_inp_grad
                 layer_inp_grad = inp_grad_dict
-            elif layer.type not in ['RNN_Layer', 'LSTM_Layer'] and \
+            elif layer.type not in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer'] and \
                     type(layer_inp_grad) is OrderedDict:
                 # If the current layer is not RNN, while the previous layer was
                 seq_len = len(layer_inp_grad)

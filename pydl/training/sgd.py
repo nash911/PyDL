@@ -40,7 +40,8 @@ class SGD(PlainTraining, RecurrentTraining):
 
     def update_network(self, t=None):
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 # Update Weights
                 layer.weights += -self._step_size * layer.weights_grad
 

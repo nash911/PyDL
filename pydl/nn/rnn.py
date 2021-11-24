@@ -228,7 +228,7 @@ class RNN(Layer):
             return weighted_sum
 
     def hidden_weight_gradients(self, inp_grad, inputs, reg_lambda=0):
-        # dy/dwh: Gradient of the layer activation 'y' w.r.t the hidden weights 'Wh'
+        # ∂y/∂wh: Gradient of the layer activation 'y' w.r.t the hidden weights 'Wh'
         hidden_weight_grad = inputs.reshape(-1, 1) * inp_grad
 
         if reg_lambda > 0:
@@ -236,7 +236,7 @@ class RNN(Layer):
         return hidden_weight_grad
 
     def input_weight_gradients(self, inp_grad, inputs, reg_lambda=0):
-        # dy/dwx: Gradient of the layer activation 'y' w.r.t the input weights 'Wx'
+        # ∂y/∂wx: Gradient of the layer activation 'y' w.r.t the input weights 'Wx'
         inp_weight_grad = inputs.reshape(-1, 1) * inp_grad
 
         if reg_lambda > 0:
@@ -247,12 +247,12 @@ class RNN(Layer):
         if not self._has_bias:
             return None
         else:
-            # dy/db: Gradient of the layer activation 'y' w.r.t the bias 'b'
+            # ∂y/∂b: Gradient of the layer activation 'y' w.r.t the bias 'b'
             grad = inp_grad.reshape(-1)
             return grad
 
     def input_gradients(self, inp_grad, summed=True):
-        # dy/dx: Gradient of the layer activation 'y' w.r.t the inputs 'X'
+        # ∂y/∂x: Gradient of the layer activation 'y' w.r.t the inputs 'X'
         out_grad = self._weights['inp'] * inp_grad
 
         if summed:
@@ -260,7 +260,7 @@ class RNN(Layer):
         return out_grad
 
     def hidden_gradients(self, inp_grad, summed=True):
-        # dy/dx: Gradient of the layer activation 'y' w.r.t the hidden layer inputs 'H_t-1'
+        # ∂y/∂x: Gradient of the layer activation 'y' w.r.t the hidden layer inputs 'H_t-1'
         hidden_grad = self._weights['hidden'] * inp_grad
 
         if summed:
@@ -339,8 +339,10 @@ class RNN(Layer):
                         if len(grad.shape) == 1:
                             grad = np.expand_dims(grad, axis=0)
                 else:
+                    # The sequence length of the current iteration is shorther than the
+                    # layer's seq_len. So skip until the end of the iteration's sequence length.
                     continue
-            else:  # Many-to-one
+            else:  # Many-to-many
                 try:
                     # Backpropagating through Dropout
                     if self._dropout is not None:
@@ -349,23 +351,25 @@ class RNN(Layer):
                         drop_grad = inp_grad[t]
                     grad = hidden_grad + drop_grad
                 except KeyError:
+                    # The sequence length of the current iteration is shorther than the
+                    # layer's seq_len. So skip until the end of the iteration's sequence length.
                     continue
 
-            # dy/dz: Gradient of the layer output w.r.t the logits 'z'
+            # ∂y/∂z: Gradient of the layer output w.r.t the logits 'z'
             activation_grad = self._activation_fn[t].backward(grad)
 
-            # dy/dw: Gradient of the layer output w.r.t the weights 'wh' and 'wx'
+            # ∂y/∂w: Gradient of the layer output w.r.t the weights 'wh' and 'wx'
             self._weights_grad['hidden'] += \
                 self.hidden_weight_gradients(activation_grad, self._hidden_state[t - 1],
                                              reg_lambda)
             self._weights_grad['inp'] += \
                 self.input_weight_gradients(activation_grad, self._inputs[t], reg_lambda)
 
-            # dy/db: Gradient of the layer output w.r.t the bias
+            # ∂y/∂b: Gradient of the layer output w.r.t the bias
             if self._has_bias:
                 self._bias_grad += self.bias_gradients(activation_grad)
 
-            # dy/di: Gradient of the layer output w.r.t the layer's inputs 'i' and 'h_t-1'
+            # ∂y/∂i: Gradient of the layer output w.r.t the layer's inputs 'i' and 'h_t-1'
             self._out_grad[t] = self.input_gradients(activation_grad)
             hidden_grad = self.hidden_gradients(activation_grad)
 
@@ -381,13 +385,7 @@ class RNN(Layer):
         return self._out_grad
 
     def update_weights(self, alpha):
-        self._weights['hidden'] += -alpha * self._weights_grad['hidden']
-        self._weights['inp'] += -alpha * self._weights_grad['inp']
-
-        if self._has_bias:
-            self._bias += -alpha * self._bias_grad
-
-        self.reset()
+        pass
 
     def reset(self):
         self.reset_gradients()

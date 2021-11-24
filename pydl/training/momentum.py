@@ -25,17 +25,18 @@ class Momentum(PlainTraining, RecurrentTraining):
     def init_momentum_velocity(self):
         # Initialize momentum velocities to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 v = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
 
-                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                try:  # A Recurrent Layer (Eg: RNN/LSTM/GRU layer)
                     if layer.tune_internal_states:
                         v['h'] = np.zeros_like(layer.init_hidden_state)
 
                         try:  # LSTM layer
                             v['c'] = np.zeros_like(layer.init_cell_state)
-                        except AttributeError:  # non-LSTM rcurrent layer
+                        except AttributeError:  # non-LSTM recurrent layer
                             pass
                 except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
                     pass
@@ -68,7 +69,8 @@ class Momentum(PlainTraining, RecurrentTraining):
 
     def update_network(self, t=None):
         for layer, v in zip(self._nn.layers, self._vel):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 v['w'] = (v['w'] * self._mu) - (self._step_size * layer.weights_grad)
                 v['b'] = (v['b'] * self._mu) - (self._step_size * layer.bias_grad)
 

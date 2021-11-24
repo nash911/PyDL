@@ -197,7 +197,7 @@ class LSTM(Layer):
             return weighted_sum
 
     def weight_gradients(self, inp_grad, inputs, reg_lambda=0):
-        # d(ifog)/dw: Gradient of the layer's i.f.o.g gates w.r.t the weights 'w'
+        # ∂(i,f,o,g)/∂w: Gradient of the layer's i.f.o.g gates w.r.t the weights 'w'
         grad = inputs.reshape(-1, 1) * inp_grad
 
         if reg_lambda > 0:
@@ -208,12 +208,13 @@ class LSTM(Layer):
         if not self._has_bias:
             return None
         else:
-            # d(ifog)/db: Gradient of the layer's i.f.o.g gates w.r.t the bias 'b'
+            # ∂(i,f,o,g)/∂b: Gradient of the layer's i.f.o.g gates w.r.t the bias 'b'
             grad = inp_grad.reshape(-1)
             return grad
 
     def input_gradients(self, inp_grad, summed=True):
-        # d(ifog)/dx: Gradient of the layer's i.f.o.g gates w.r.t the inputs 'X' [h_(t-1), h_(l-1)]
+        # ∂(i,f,o,g)/∂x: Gradient of the layer's i.f.o.g gates w.r.t the inputs 'X':
+        # [h_(t-1), h_(l-1)]
         out_grad = self._weights * inp_grad
 
         if summed:
@@ -302,8 +303,10 @@ class LSTM(Layer):
                         if len(grad.shape) == 1:
                             grad = np.expand_dims(grad, axis=0)
                 else:
+                    # The sequence length of the current iteration is shorther than the
+                    # layer's seq_len. So skip until the end of the iteration's sequence length.
                     continue
-            else:  # Many-to-one
+            else:  # Many-to-many
                 try:
                     # Backpropagating through Dropout
                     if self._dropout is not None:
@@ -312,6 +315,8 @@ class LSTM(Layer):
                         drop_grad = inp_grad[t]
                     grad = hidden_grad + drop_grad
                 except KeyError:
+                    # The sequence length of the current iteration is shorther than the
+                    # layer's seq_len. So skip until the end of the iteration's sequence length.
                     continue
 
             # Outputs of gate activations
@@ -343,15 +348,16 @@ class LSTM(Layer):
             concat_grads = np.concatenate((i_gate_grad, f_gate_grad, o_gate_grad, g_gate_grad),
                                           axis=-1)
 
-            # d(ifog)/dw: Gradient of the layer's i.f.o.g gates w.r.t the weights 'w'
+            # ∂(i,f,o,g)/∂w: Gradient of the layer's i.f.o.g gates w.r.t the weights 'w'
             self._weights_grad += \
                 self.weight_gradients(concat_grads, self._inputs[t], reg_lambda)
 
-            # d(ifog)/db: Gradient of the layer's i.f.o.g gates w.r.t the bias 'b'
+            # ∂(i,f,o,g)/∂b: Gradient of the layer's i.f.o.g gates w.r.t the bias 'b'
             if self._has_bias:
                 self._bias_grad += self.bias_gradients(concat_grads)
 
-            # d(ifog)/dx: Grads of the layer's i.f.o.g gates w.r.t the inputs 'X' [h_(t-1), h_(l-1)]
+            # ∂(i,f,o,g)/∂x: Grads of the layer's i.f.o.g gates w.r.t the inputs 'X':
+            # [h_(t-1), h_(l-1)]
             hidden_grad, self._out_grad[t] = self.input_gradients(concat_grads)
 
         if self._tune_internal_states and self._update_init_internal_states:
@@ -377,12 +383,7 @@ class LSTM(Layer):
         return self._out_grad
 
     def update_weights(self, alpha):
-        self._weights += -alpha * self._weights_grad
-
-        if self._has_bias:
-            self._bias += -alpha * self._bias_grad
-
-        self.reset()
+        pass
 
     def reset(self):
         self.reset_gradients()

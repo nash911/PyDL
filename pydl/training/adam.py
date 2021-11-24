@@ -27,14 +27,15 @@ class Adam(PlainTraining, RecurrentTraining):
     def init_adam_moment(self):
         # Initialize cache to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 m = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
 
                 v = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
 
-                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                try:  # A Recurrent Layer (Eg: RNN/LSTM/GRU layer)
                     if layer.tune_internal_states:
                         m['h'] = np.zeros_like(layer.init_hidden_state)
                         v['h'] = np.zeros_like(layer.init_hidden_state)
@@ -42,7 +43,7 @@ class Adam(PlainTraining, RecurrentTraining):
                         try:  # LSTM layer
                             m['c'] = np.zeros_like(layer.init_cell_state)
                             v['c'] = np.zeros_like(layer.init_cell_state)
-                        except AttributeError:  # non-LSTM rcurrent layer
+                        except AttributeError:  # non-LSTM recurrent layer
                             pass
                 except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
                     pass
@@ -77,7 +78,8 @@ class Adam(PlainTraining, RecurrentTraining):
 
     def update_network(self, t):
         for layer, m, v in zip(self._nn.layers, self._m, self._v):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 # First order moment update
                 m['w'] = (self._beta_1 * m['w']) + ((1 - self._beta_1) * layer.weights_grad)
                 m['b'] = (self._beta_1 * m['b']) + ((1 - self._beta_1) * layer.bias_grad)

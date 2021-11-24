@@ -25,17 +25,18 @@ class RMSprop(PlainTraining, RecurrentTraining):
     def init_rmsprop_cache(self):
         # Initialize cache to zero
         for layer in self._nn.layers:
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 c = {'w': np.zeros_like(layer.weights),
                      'b': np.zeros_like(layer.bias)}
 
-                try:  # A Recurrent Layer (Eg: RNN or LSTM layer)
+                try:  # A Recurrent Layer (Eg: RNN/LSTM/GRU layer)
                     if layer.tune_internal_states:
                         c['h'] = np.zeros_like(layer.init_hidden_state)
 
                         try:  # LSTM layer
                             c['c'] = np.zeros_like(layer.init_cell_state)
-                        except AttributeError:  # non-LSTM rcurrent layer
+                        except AttributeError:  # non-LSTM recurrent layer
                             pass
                 except AttributeError:  # Non-Recurrent Layer (FC or CNN layer)
                     pass
@@ -68,7 +69,8 @@ class RMSprop(PlainTraining, RecurrentTraining):
 
     def update_network(self, t=None):
         for layer, c in zip(self._nn.layers, self._cache):
-            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer']:
+            if layer.type in ['FC_Layer', 'Convolution_Layer', 'RNN_Layer', 'LSTM_Layer',
+                              'GRU_Layer']:
                 c['w'] = (self._beta * c['w']) + ((1 - self._beta) * (layer.weights_grad**2))
                 c['b'] = (self._beta * c['b']) + ((1 - self._beta) * (layer.bias_grad**2))
 
