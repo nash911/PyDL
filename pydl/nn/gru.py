@@ -23,7 +23,7 @@ class GRU(Layer):
 
     def __init__(self, inputs, num_neurons=None, weights=None, bias=True, seq_len=None, xavier=True,
                  weight_scale=1.0, architecture_type='many_to_many', dropout=None,
-                 tune_internal_states=False, name=None):
+                 reset_pre_transform=True, tune_internal_states=False, name=None):
         super().__init__(name=name)
         self._weights = OrderedDict()
         self._bias = OrderedDict()
@@ -50,6 +50,7 @@ class GRU(Layer):
         self._weight_scale = weight_scale
         self._xavier = xavier
         self._has_bias = True if type(bias) in [np.ndarray, float, int, dict, OrderedDict] else bias
+        self._reset_pre_transform = reset_pre_transform
         self._tune_internal_states = tune_internal_states
         self._update_init_internal_states = True
 
@@ -272,7 +273,7 @@ class GRU(Layer):
     def score_fn(self, inputs, weights, bias=None):
         weighted_sum = np.matmul(inputs, weights)
 
-        if self._has_bias:
+        if self._has_bias and bias is not None:
             return weighted_sum + bias
         else:
             return weighted_sum
@@ -329,12 +330,23 @@ class GRU(Layer):
                 self._reset_gate[t].forward(score[:, self._num_neurons:])
 
             # Calculate candidate activation (h̃ₜ)
-            # h̃ₜ = tanh(U(rₜ ⊙ hₜ-₁) + WXₜ + b)
-            append_reset_gate = np.concatenate((reset_gate, np.ones_like(inp)), axis=-1)
-            reset_inputs = concat_inputs * append_reset_gate
-            candidate_score = self.score_fn(reset_inputs, self._weights['candidate'],
-                                            self._bias['candidate'])
-            candidate_actvn = self._candidate_activation_fn[t].forward(candidate_score)
+            if self._reset_pre_transform:
+                # h̃ₜ = tanh(U(rₜ ⊙ hₜ-₁) + WXₜ + b)
+                append_reset_gate = np.concatenate((reset_gate, np.ones_like(inp)), axis=-1)
+                reset_inputs = concat_inputs * append_reset_gate
+                candidate_score = self.score_fn(reset_inputs, self._weights['candidate'],
+                                                self._bias['candidate'])
+                candidate_actvn = self._candidate_activation_fn[t].forward(candidate_score)
+            else:
+                # h̃ₜ = tanh((rₜ ⊙ Uhₜ-₁) + WXₜ + b)
+                candidate_score_hidden = \
+                    self.score_fn(self._hidden_state[t - 1],
+                                  self._weights['candidate'][:self._num_neurons, :]) * reset_gate
+                candidate_score_inp = \
+                    self.score_fn(inp, self._weights['candidate'][self._num_neurons:, :])
+                candidate_score = \
+                    candidate_score_hidden + candidate_score_inp + self._bias['candidate']
+                candidate_actvn = self._candidate_activation_fn[t].forward(candidate_score)
 
             # Update Hidden state
             # hₜ = zₜ ⊙ hₜ-₁ + (1 - zₜ) ⊙ h̃ₜ
@@ -422,11 +434,17 @@ class GRU(Layer):
             cand_grad = self._candidate_activation_fn[t].backward((1.0 - z_out) * grad)
 
             # Reset gate gradients (r'ₜ):
-            # r'ₜ = σ'((∂h̃ₜ/∂rₜ) * gₜ) = σ'((hᵀ₍ₜ-₁₎∙Uᵀ) * h̃'ₜ)
-            r_input_grad = np.sum((self._weights['candidate'][:self._num_neurons, :] *
-                                   self._hidden_state[t - 1].reshape(-1, 1) * cand_grad), axis=-1,
-                                  keepdims=False)
-            reset_gate_grad = self._reset_gate[t].backward(r_input_grad)
+            if self._reset_pre_transform:
+                # r'ₜ = σ'((∂h̃ₜ/∂rₜ) * gₜ) = σ'((hᵀ₍ₜ-₁₎∙Uᵀ) * h̃'ₜ)
+                r_input_grad = np.sum((self._weights['candidate'][:self._num_neurons, :] *
+                                       self._hidden_state[t - 1].reshape(-1, 1) * cand_grad),
+                                      axis=-1, keepdims=False)
+                reset_gate_grad = self._reset_gate[t].backward(r_input_grad)
+            else:
+                # r'ₜ = σ'((∂h̃ₜ/∂rₜ) * gₜ) = σ'(Uhₜ-₁ * h̃'ₜ)
+                r_input_grad = self.score_fn(self._hidden_state[t - 1],
+                                             self._weights['candidate'][:self._num_neurons, :])
+                reset_gate_grad = self._reset_gate[t].backward(r_input_grad * cand_grad)
 
             # Concatinate update and reset gate gradients to backprop through weights and inputs
             concat_grads = np.concatenate((update_gate_grad, reset_gate_grad), axis=-1)
@@ -436,11 +454,19 @@ class GRU(Layer):
                                                                  reg_lambda)
 
             # ∂(h̃ₜ)/∂w: Gradient of the layer's candidate activation w.r.t the weights 'w'
-            append_reset_gate = \
-                np.concatenate((r_out, np.ones((1, self._inp_size), dtype=conf.dtype)), axis=-1)
-            reset_inputs = self._inputs[t] * append_reset_gate
-            self._weights_grad['candidate'] += self.weight_gradients(cand_grad, reset_inputs,
-                                                                     reg_lambda)
+            if self._reset_pre_transform:
+                append_reset_gate = \
+                    np.concatenate((r_out, np.ones((1, self._inp_size), dtype=conf.dtype)), axis=-1)
+                reset_inputs = self._inputs[t] * append_reset_gate
+                self._weights_grad['candidate'] += \
+                    self.weight_gradients(cand_grad, reset_inputs, reg_lambda)
+            else:
+                append_reset_gate = np.concatenate((np.tile(r_out, (self._num_neurons, 1)),
+                                                    np.ones((self._inp_size, self._num_neurons),
+                                                            dtype=conf.dtype)), axis=0)
+                self._weights_grad['candidate'] += \
+                    self.weight_gradients(cand_grad, self._inputs[t], reg_lambda) * \
+                    append_reset_gate
 
             if self._has_bias:
                 # ∂(zₜ, rₜ)/∂b: Gradient of the layer's update and reset gates w.r.t the bias 'b'
@@ -449,15 +475,20 @@ class GRU(Layer):
                 # ∂(h̃ₜ)/∂b: Gradient of the layer's candidate activation w.r.t the bias 'b'
                 self._bias_grad['candidate'] += self.bias_gradients(cand_grad)
 
-            # ∂(zₜ, rₜ)/∂x: Gradient of the layer's update and reset gates w.r.t the
+            # ∂(zₜ, rₜ)/∂X: Gradient of the layer's update and reset gates w.r.t the
             # inputs: 'X' [h_(t-1), h_(l-1)]
             input_grads = self.input_gradients(self._weights['gates'], concat_grads)
 
-            # ∂(h̃ₜ)/∂x: Gradient of the layer's candidate activation w.r.t the inputs:
-            # 'X' [h_(t-1), h_(l-1)]
-            cand_weights_reset = self._weights['candidate'] * append_reset_gate.reshape(-1, 1)
-            input_grads += self.input_gradients(cand_weights_reset, cand_grad)
+            # ∂(h̃ₜ)/∂xₜ: Gradient of the layer's candidate activation w.r.t the inputs (xₜ)
+            if self._reset_pre_transform:
+                cand_weights_reset = self._weights['candidate'] * append_reset_gate.reshape(-1, 1)
+                input_grads += self.input_gradients(cand_weights_reset, cand_grad)
+            else:
+                cand_weights_reset = self._weights['candidate'] * append_reset_gate
+                input_grads += self.input_gradients(cand_weights_reset, cand_grad)
 
+            # ∂(h̃ₜ)/∂hₜ-₁: Gradient of the layer's candidate activation w.r.t the
+            # previous hidden state (hₜ-₁)
             hidden_grad = input_grads[:self._num_neurons].reshape(1, -1) + (z_out * grad)
             self._out_grad[t] = input_grads[self._num_neurons:]
 

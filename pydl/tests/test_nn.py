@@ -1655,12 +1655,14 @@ class TestNN(unittest.TestCase):
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
         architecture_type = ['many_to_many', 'many_to_one']
+        reset_pre_trans = [True, False]
         tune_internal_states = [True, False]
         reduce_size = [0, 3]
         scl = 0.1
 
-        for a_type, tune, r_size in list(itertools.product(architecture_type, tune_internal_states,
-                                                           reduce_size)):
+        for a_type, reset, tune, r_size in \
+            list(itertools.product(architecture_type, reset_pre_trans, tune_internal_states,
+                                   reduce_size)):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
@@ -1685,8 +1687,8 @@ class TestNN(unittest.TestCase):
             # GRU Architecture
             # ----------------
             dp1 = np.random.rand()
-            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
-                     architecture_type=a_type, name='GRU-1')
+            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, reset_pre_transform=reset,
+                     tune_internal_states=tune, architecture_type=a_type, name='GRU-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
             if tune:
@@ -1723,8 +1725,8 @@ class TestNN(unittest.TestCase):
             # GRU Architecture
             # ----------------
             dp1 = np.random.rand()
-            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
-                     architecture_type=a_type, name='GRU-1')
+            l1 = GRU(X, num_neur_gru, w_1, b_1, seq_len, dropout=dp1, reset_pre_transform=reset,
+                     tune_internal_states=tune, architecture_type=a_type, name='GRU-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
             if tune:
@@ -1771,8 +1773,8 @@ class TestNN(unittest.TestCase):
             l1.dropout_mask = mask_l1
 
             dp2 = np.random.rand()
-            l2 = GRU(l1, num_neur_gru, w_2, b_2, seq_len, dropout=dp2, tune_internal_states=tune,
-                     architecture_type=a_type, name='GRU-2')
+            l2 = GRU(l1, num_neur_gru, w_2, b_2, seq_len, dropout=dp2, reset_pre_transform=reset,
+                     tune_internal_states=tune, architecture_type=a_type, name='GRU-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neur_gru) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
             if tune:
@@ -1822,7 +1824,7 @@ class TestNN(unittest.TestCase):
             # ----------------
             dp1 = np.random.rand()
             l1 = GRU(X, num_neur_gru_1, w_1, b_1, seq_len, dropout=dp1, tune_internal_states=tune,
-                     architecture_type='many_to_many', name='GRU-1')
+                     reset_pre_transform=not(reset), architecture_type='many_to_many', name='GRU-1')
             mask_l1 = np.array(np.random.rand(batch_size, num_neur_gru_1) < dp1, dtype=conf.dtype)
             l1.dropout_mask = mask_l1
             if tune:
@@ -1831,7 +1833,7 @@ class TestNN(unittest.TestCase):
 
             dp2 = np.random.rand()
             l2 = GRU(l1, num_neur_gru_2, w_2, b_2, seq_len, dropout=dp2, tune_internal_states=tune,
-                     architecture_type=a_type, name='GRU-2')
+                     reset_pre_transform=not(reset), architecture_type=a_type, name='GRU-2')
             mask_l2 = np.array(np.random.rand(batch_size, num_neur_gru_2) < dp2, dtype=conf.dtype)
             l2.dropout_mask = mask_l2
             if tune:

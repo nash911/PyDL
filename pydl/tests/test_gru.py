@@ -25,13 +25,13 @@ class TestGRU(unittest.TestCase):
         self.delta = 1e-6
         tol = 8
 
-        def test(inp, num_neur, w, bias, seq_len, inp_grad, init_hidden_state=None, p=None,
-                 mask=None, architecture_type='many_to_many'):
+        def test(inp, num_neur, w, bias, seq_len, inp_grad, reset=True, init_hidden_state=None,
+                 p=None, mask=None, architecture_type='many_to_many'):
             if type(bias) == int:
                 bias = {'gates': np.ones(2 * num_neur) * bias,
                         'candidate': np.ones(num_neur) * bias}
 
-            gru = GRU(inp, num_neur, w, bias, seq_len=seq_len, dropout=p,
+            gru = GRU(inp, num_neur, w, bias, seq_len=seq_len, dropout=p, reset_pre_transform=reset,
                       tune_internal_states=(False if init_hidden_state is None else True),
                       architecture_type=architecture_type)
             if init_hidden_state is not None:
@@ -229,15 +229,16 @@ class TestGRU(unittest.TestCase):
         one_hot = [True, False]
         scale = [1e-2, 1e+0]
         unit_inp_grad = [True, False]
+        reset_pre_trans = [True, False]
         dropout = [True, False]
         architecture_type = ['many_to_many', 'many_to_one']
         tune_internal_states = [True, False]
         repeat = list(range(1))
 
-        for seq_len, r_size, feat, neur, b, oh, scl, unit, dout, a_type, tune, r in \
+        for seq_len, r_size, feat, neur, b, oh, scl, unit, reset, dout, a_type, tune, r in \
             list(itertools.product(sequence_length, reduce_size, feature_size, num_neurons, bias,
-                                   one_hot, scale, unit_inp_grad, dropout, architecture_type,
-                                   tune_internal_states, repeat)):
+                                   one_hot, scale, unit_inp_grad, reset_pre_trans, dropout,
+                                   architecture_type, tune_internal_states, repeat)):
 
             batch_size = seq_len - (r_size if seq_len > 1 else 0)
 
@@ -280,7 +281,7 @@ class TestGRU(unittest.TestCase):
                 p = None
                 mask = None
 
-            test(X, neur, w, bias, seq_len, inp_grad, init_h_state, p, mask, a_type)
+            test(X, neur, w, bias, seq_len, inp_grad, reset, init_h_state, p, mask, a_type)
 
 
 if __name__ == '__main__':

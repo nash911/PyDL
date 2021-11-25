@@ -47,7 +47,7 @@ def main():
     plt.close()
 
     l1 = GRU(X, num_neurons=5, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
-             tune_internal_states=True, name="GRU-1")
+             reset_pre_transform=False, tune_internal_states=True, name="GRU-1")
     l2 = FC(l1, num_neurons=X.shape[-1], bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='Linear', name="Output-Layer")
     layers = [l1, l2]
