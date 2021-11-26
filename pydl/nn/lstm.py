@@ -72,7 +72,9 @@ class LSTM(Layer):
         if type(bias) == np.ndarray:
             self._bias = bias
         elif type(bias) in [float, int]:
-            self._bias = np.ones(int(4 * self._num_neurons), dtype=conf.dtype) * bias
+            self._bias = np.hstack((np.zeros(int(self._num_neurons), dtype=conf.dtype),
+                                    np.ones(int(self._num_neurons), dtype=conf.dtype) * bias,
+                                    np.zeros(int(2 * self._num_neurons), dtype=conf.dtype)))
         elif bias:
             self._bias = np.zeros(int(4 * self._num_neurons), dtype=conf.dtype)
         else:
@@ -159,22 +161,28 @@ class LSTM(Layer):
         num_neurons = self._num_neurons if num_neurons is None else num_neurons
 
         # Reinitialize weights
-        self._weights = np.random.randn((self._num_neurons + self._inp_size),
-                                        int(4 * self._num_neurons)) * self._weight_scale
+        self._weights = np.random.randn((num_neurons + num_feat),
+                                        int(4 * num_neurons)) * self._weight_scale
         if self._xavier:
             # Apply Xavier Initialization
-            norm_fctr = np.sqrt(self._num_neurons + self._inp_size)
+            norm_fctr = np.sqrt(num_neurons + num_feat)
             self._weights /= norm_fctr
-
-        # Reset layer size
-        self._inp_size = num_feat
-        self._num_neurons = num_neurons
 
         if self._has_bias:
             if np.all(self._bias == self._bias[0]):
                 self._bias = np.ones(int(4 * num_neurons), dtype=conf.dtype) * self._bias[0]
             else:
-                self._bias = np.zeros(int(4 * num_neurons), dtype=conf.dtype)
+                if self._bias[self._num_neurons] == self._bias[self._num_neurons + 1]:
+                    bias = self._bias[self._num_neurons]
+                    self._bias = np.hstack((np.zeros(int(num_neurons), dtype=conf.dtype),
+                                            np.ones(int(num_neurons), dtype=conf.dtype) * bias,
+                                            np.zeros(int(2 * num_neurons), dtype=conf.dtype)))
+                else:
+                    self._bias = np.zeros(int(4 * num_neurons), dtype=conf.dtype)
+
+        # Reset layer size
+        self._inp_size = num_feat
+        self._num_neurons = num_neurons
 
         self.reset_gradients()
 

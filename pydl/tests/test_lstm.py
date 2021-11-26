@@ -26,7 +26,9 @@ class TestLSTM(unittest.TestCase):
         def test(inp, num_neur, w, bias, seq_len, inp_grad, init_cell_state=None,
                  init_hidden_state=None, p=None, mask=None, architecture_type='many_to_many'):
             if type(bias) == int:
-                bias = np.ones(4 * num_neur) * bias
+                bias = np.hstack((np.zeros(num_neur),
+                                  np.ones(num_neur) * bias,
+                                  np.zeros(2 * num_neur)))
             lstm = LSTM(inp, num_neur, w, bias, seq_len=seq_len, dropout=p,
                         tune_internal_states=(False if init_hidden_state is None else True),
                         architecture_type=architecture_type)

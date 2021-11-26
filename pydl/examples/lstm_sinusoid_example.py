@@ -46,7 +46,7 @@ def main():
     plt.waitforbuttonpress(0)
     plt.close()
 
-    l1 = LSTM(X, num_neurons=5, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
+    l1 = LSTM(X, num_neurons=5, bias=1.0, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
               tune_internal_states=True, name="LSTM-1")
     l2 = FC(l1, num_neurons=X.shape[-1], bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='Linear', name="Output-Layer")

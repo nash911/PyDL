@@ -28,8 +28,8 @@ class TestGRU(unittest.TestCase):
         def test(inp, num_neur, w, bias, seq_len, inp_grad, reset=True, init_hidden_state=None,
                  p=None, mask=None, architecture_type='many_to_many'):
             if type(bias) == int:
-                bias = {'gates': np.ones(2 * num_neur) * bias,
-                        'candidate': np.ones(num_neur) * bias}
+                bias = {'gates': np.hstack((np.zeros(num_neur), np.ones(num_neur) * bias)),
+                        'candidate': np.zeros(num_neur)}
 
             gru = GRU(inp, num_neur, w, bias, seq_len=seq_len, dropout=p, reset_pre_transform=reset,
                       tune_internal_states=(False if init_hidden_state is None else True),

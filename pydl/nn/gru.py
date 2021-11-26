@@ -86,8 +86,10 @@ class GRU(Layer):
 
             self._bias = bias
         elif type(bias) in [float, int]:
-            self._bias['gates'] = np.ones(int(2 * self._num_neurons), dtype=conf.dtype) * bias
-            self._bias['candidate'] = np.ones(self._num_neurons, dtype=conf.dtype) * bias
+            self._bias['gates'] = \
+                np.hstack((np.zeros(self._num_neurons, dtype=conf.dtype),
+                           np.ones(int(self._num_neurons), dtype=conf.dtype) * bias))
+            self._bias['candidate'] = np.zeros(self._num_neurons, dtype=conf.dtype)
         elif bias:
             self._bias['gates'] = np.zeros(int(2 * self._num_neurons), dtype=conf.dtype)
             self._bias['candidate'] = np.zeros(self._num_neurons, dtype=conf.dtype)
@@ -252,7 +254,12 @@ class GRU(Layer):
                 self._bias['gates'] = \
                     np.ones(int(2 * num_neurons), dtype=conf.dtype) * self._bias['gates'][0]
             else:
-                self._bias['gates'] = np.zeros(int(2 * num_neurons), dtype=conf.dtype)
+                if self._bias['gates'][-1] == self._bias['gates'][-2]:
+                    self._bias['gates'] = np.hstack((np.zeros(num_neurons, dtype=conf.dtype),
+                                                     np.ones(int(num_neurons), dtype=conf.dtype) *
+                                                     self._bias['gates'][-1]))
+                else:
+                    self._bias['gates'] = np.zeros(int(2 * num_neurons), dtype=conf.dtype)
 
             if np.all(self._bias['candidate'] == self._bias['candidate'][0]):
                 self._bias['candidate'] = \

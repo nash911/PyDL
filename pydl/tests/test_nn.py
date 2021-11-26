@@ -1655,14 +1655,15 @@ class TestNN(unittest.TestCase):
             self.inputs_1D_grad_test(nn, inp, inp_grad, inputs_grad, self.delta)
 
         architecture_type = ['many_to_many', 'many_to_one']
+        random_bias = [True, False]
         reset_pre_trans = [True, False]
         tune_internal_states = [True, False]
         reduce_size = [0, 3]
         scl = 0.1
 
-        for a_type, reset, tune, r_size in \
-            list(itertools.product(architecture_type, reset_pre_trans, tune_internal_states,
-                                   reduce_size)):
+        for a_type, r_bias, reset, tune, r_size in \
+            list(itertools.product(architecture_type, random_bias, reset_pre_trans,
+                                   tune_internal_states, reduce_size)):
             # Case-1 - Continuous Inputs
             # --------------------------
             # Layer 1
@@ -1675,7 +1676,11 @@ class TestNN(unittest.TestCase):
             w_1['gates'] = np.random.randn((num_neur_gru + X.shape[-1]), (2 * num_neur_gru)) * scl
             w_1['candidate'] = np.random.randn((num_neur_gru + X.shape[-1]), num_neur_gru) * scl
             b_1 = OrderedDict()
-            b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            if r_bias:
+                b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            else:
+                b_1['gates'] = np.hstack((np.zeros(num_neur_gru) * scl,
+                                          np.ones(num_neur_gru) * np.random.randint(11)))
             b_1['candidate'] = np.random.rand(num_neur_gru) * scl
             init_h = np.random.rand(1, num_neur_gru) * scl
 
@@ -1713,7 +1718,11 @@ class TestNN(unittest.TestCase):
             w_1['gates'] = np.random.randn((num_neur_gru + X.shape[-1]), (2 * num_neur_gru)) * scl
             w_1['candidate'] = np.random.randn((num_neur_gru + X.shape[-1]), num_neur_gru) * scl
             b_1 = OrderedDict()
-            b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            if r_bias:
+                b_1['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            else:
+                b_1['gates'] = np.hstack((np.zeros(num_neur_gru) * scl,
+                                          np.ones(num_neur_gru) * np.random.randint(11)))
             b_1['candidate'] = np.random.rand(num_neur_gru) * scl
             init_h = np.random.rand(1, num_neur_gru) * scl
 
@@ -1756,7 +1765,11 @@ class TestNN(unittest.TestCase):
                 np.random.randn((num_neur_gru + num_neurons_fc), (2 * num_neur_gru)) * scl
             w_2['candidate'] = np.random.randn((num_neur_gru + num_neurons_fc), num_neur_gru) * scl
             b_2 = OrderedDict()
-            b_2['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            if r_bias:
+                b_2['gates'] = np.random.rand(2 * num_neur_gru) * scl
+            else:
+                b_2['gates'] = np.hstack((np.zeros(num_neur_gru) * scl,
+                                          np.ones(num_neur_gru) * np.random.randint(11)))
             b_2['candidate'] = np.random.rand(num_neur_gru) * scl
             init_h = np.random.rand(1, num_neur_gru) * scl
 
@@ -1799,7 +1812,11 @@ class TestNN(unittest.TestCase):
                 np.random.randn((num_neur_gru_1 + X.shape[-1]), (2 * num_neur_gru_1)) * scl
             w_1['candidate'] = np.random.randn((num_neur_gru_1 + X.shape[-1]), num_neur_gru_1) * scl
             b_1 = OrderedDict()
-            b_1['gates'] = np.random.rand(2 * num_neur_gru_1) * scl
+            if r_bias:
+                b_1['gates'] = np.random.rand(2 * num_neur_gru_1) * scl
+            else:
+                b_1['gates'] = np.hstack((np.zeros(num_neur_gru_1) * scl,
+                                          np.ones(num_neur_gru_1) * np.random.randint(11)))
             b_1['candidate'] = np.random.rand(num_neur_gru_1) * scl
             init_h_1 = np.random.rand(1, num_neur_gru_1) * scl
 
@@ -1811,7 +1828,11 @@ class TestNN(unittest.TestCase):
             w_2['candidate'] = \
                 np.random.randn((num_neur_gru_2 + num_neur_gru_1), num_neur_gru_2) * scl
             b_2 = OrderedDict()
-            b_2['gates'] = np.random.rand(2 * num_neur_gru_2) * scl
+            if r_bias:
+                b_2['gates'] = np.random.rand(2 * num_neur_gru_2) * scl
+            else:
+                b_2['gates'] = np.hstack((np.zeros(num_neur_gru_2) * scl,
+                                          np.ones(num_neur_gru_2) * np.random.randint(11)))
             b_2['candidate'] = np.random.rand(num_neur_gru_2) * scl
             init_h_2 = np.random.rand(1, num_neur_gru_2) * scl
 
