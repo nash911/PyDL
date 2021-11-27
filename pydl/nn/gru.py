@@ -285,11 +285,11 @@ class GRU(Layer):
         else:
             return weighted_sum
 
-    def weight_gradients(self, inp_grad, inputs, reg_lambda=0):
+    def weight_gradients(self, inp_grad, inputs, weights, reg_lambda=0):
         grad = inputs.reshape(-1, 1) * inp_grad
 
         if reg_lambda > 0:
-            grad += (reg_lambda * self._weights)
+            grad += (reg_lambda * weights)
         return grad
 
     def bias_gradients(self, inp_grad):
@@ -457,8 +457,9 @@ class GRU(Layer):
             concat_grads = np.concatenate((update_gate_grad, reset_gate_grad), axis=-1)
 
             # ∂(zₜ, rₜ)/∂w: Gradient of the layer's update and reset gates w.r.t the weights 'w'
-            self._weights_grad['gates'] += self.weight_gradients(concat_grads, self._inputs[t],
-                                                                 reg_lambda)
+            self._weights_grad['gates'] += \
+                self.weight_gradients(concat_grads, self._inputs[t], self._weights['gates'],
+                                      reg_lambda)
 
             # ∂(h̃ₜ)/∂w: Gradient of the layer's candidate activation w.r.t the weights 'w'
             if self._reset_pre_transform:
@@ -466,14 +467,15 @@ class GRU(Layer):
                     np.concatenate((r_out, np.ones((1, self._inp_size), dtype=conf.dtype)), axis=-1)
                 reset_inputs = self._inputs[t] * append_reset_gate
                 self._weights_grad['candidate'] += \
-                    self.weight_gradients(cand_grad, reset_inputs, reg_lambda)
+                    self.weight_gradients(cand_grad, reset_inputs, self._weights['candidate'],
+                                          reg_lambda)
             else:
                 append_reset_gate = np.concatenate((np.tile(r_out, (self._num_neurons, 1)),
                                                     np.ones((self._inp_size, self._num_neurons),
                                                             dtype=conf.dtype)), axis=0)
                 self._weights_grad['candidate'] += \
-                    self.weight_gradients(cand_grad, self._inputs[t], reg_lambda) * \
-                    append_reset_gate
+                    self.weight_gradients(cand_grad, self._inputs[t], self._weights['candidate'],
+                                          reg_lambda) * append_reset_gate
 
             if self._has_bias:
                 # ∂(zₜ, rₜ)/∂b: Gradient of the layer's update and reset gates w.r.t the bias 'b'
