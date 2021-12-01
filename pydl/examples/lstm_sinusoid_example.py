@@ -23,9 +23,10 @@ def generate_sine_data():
     T = 20
     L = 2084
     N = 3
+    A = np.random.rand(1, N)
 
     x = np.array(range(L)).reshape(L, 1) + np.random.randint(-4 * T, 4 * T, N).reshape(1, N)
-    data = np.sin(x / 1.0 / T).astype(conf.dtype)
+    data = A * np.sin(x / 1.0 / T).astype(conf.dtype)
 
     return data
 
