@@ -34,7 +34,7 @@ class RecurrentTraining(Training):
             if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                 layer.reset_internal_states(hidden_state)
 
-    def fit_test_data(self, X, fig, axs, batch_size=None, inference=True):
+    def fit_test_data(self, X, fig, axs, batch_size=None, normalize=None, inference=True):
         if batch_size is None:
             batch_size = X.shape[0]
         num_batches = int(np.ceil(X.shape[0] / batch_size))
@@ -49,14 +49,25 @@ class RecurrentTraining(Training):
                 end = X.shape[0]
             else:
                 end = start + batch_size
-            test_pred.append(self._nn.forward(X[start:end], inference))
+            prediction = self._nn.forward(X[start:end], inference)
+            if normalize is not None:
+                if normalize.lower() == 'mean':
+                    prediction = self.unnormalize_mean(prediction)
+            test_pred.append(prediction)
             self.reset_recurrent_layers(hidden_state='previous_state')
         test_pred = np.concatenate(test_pred, axis=0)
 
         colors = ['red', 'blue', 'green', 'purple', 'orange']
         axs.clear()
+
+        if normalize is not None:
+            if normalize.lower() == 'mean':
+                unnorm_X = self.unnormalize_mean(X)
+        else:
+            unnorm_X = X
+
         for c in range(X.shape[-1]):
-            axs.plot(X[1:, c], linestyle='-', color=colors[c])
+            axs.plot(unnorm_X[1:, c], linestyle='-', color=colors[c])
             axs.plot(test_pred[:-1, c], '.', color=colors[c])
 
         plt.show(block=False)
@@ -86,7 +97,7 @@ class RecurrentTraining(Training):
         for k, v in self._idx_to_char.items():
             print("%d: %s" % (k, v))
 
-    def prepare_sequence_data(self, X, y=None, normalize=False):
+    def prepare_sequence_data(self, X, y=None, normalize=None):
         try:
             data_size = X.shape[0]
             train_size = int(data_size * self._train_size) if self._train_size <= 1.0 else \
@@ -110,19 +121,21 @@ class RecurrentTraining(Training):
                     self._train_y = np.reshape(np.argmax(self._train_y, axis=-1), newshape=(-1, 1))
                     self._test_y = np.reshape(np.argmax(self._test_y, axis=-1), newshape=(-1, 1))
 
-            if normalize:
-                # Mean Normalize data
-                mean, std, self._train_X = self.mean_normalize(self._train_X)
-                _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+            if normalize is not None:
+                if normalize.lower() == 'mean':
+                    # Mean Normalize data
+                    mean, std, self._train_X = self.mean_normalize(self._train_X)
+                    _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
         else:
             if self._regression:
                 self._train_X = X[:train_size]
                 self._test_X = X[train_size:]
 
-                if normalize:
-                    # Mean Normalize data
-                    mean, std, self._train_X = self.mean_normalize(self._train_X)
-                    _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+                if normalize is not None:
+                    if normalize.lower() == 'mean':
+                        # Mean Normalize data
+                        mean, std, self._train_X = self.mean_normalize(self._train_X)
+                        _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
             else:
                 self.prepare_character_data(X)
 
@@ -159,8 +172,14 @@ class RecurrentTraining(Training):
 
         return sampled_text
 
-    def generate_cont_time_series_data(self, fig, axs, sample_length=500):
-        input = self._train_X[-1].reshape(1, -1)
+    def generate_cont_time_series_data(self, fig, axs, normalize=None, sample_length=500):
+        if normalize is not None:
+            if normalize.lower() == 'mean':
+                train_X = self.unnormalize_mean(self._train_X)
+        else:
+            train_X = self._train_X
+
+        input = train_X[-1].reshape(1, -1)
 
         sampled_data = [input]
         for n in range(sample_length):
@@ -171,11 +190,16 @@ class RecurrentTraining(Training):
                     layer.reset_internal_states('previous_state')
                 else:
                     input = layer.forward(input, inference=True)
-                    sampled_data.append(input)
+                    if normalize is not None:
+                        if normalize.lower() == 'mean':
+                            unnormalized_output = self.unnormalize_mean(input)
+                    else:
+                        unnormalized_output = input
+                    sampled_data.append(unnormalized_output)
 
         sampled_data = np.concatenate(sampled_data, axis=0)
-        data = np.vstack((self._train_X, sampled_data))
-        train_size = self._train_X.shape[0]
+        data = np.vstack((train_X, sampled_data))
+        train_size = train_X.shape[0]
 
         colors = ['red', 'blue', 'green', 'purple', 'orange']
         axs.clear()
@@ -189,8 +213,8 @@ class RecurrentTraining(Training):
 
         return
 
-    def train_recurrent(self, batch_size=256, epochs=1000, sample_length=100, temperature=1.0,
-                        plot=None, fit_test_data=False, log_freq=100):
+    def train_recurrent(self, batch_size=256, epochs=1000, sample_length=100, normalize=None,
+                        temperature=1.0, plot=None, fit_test_data=False, log_freq=100):
         start_time = time.time()
 
         if plot is not None:
@@ -265,7 +289,8 @@ class RecurrentTraining(Training):
                         # Generate continuous time series data starting from the last training
                         # data point
                         sampled_text = \
-                            self.generate_cont_time_series_data(fig_2, axs_2, sample_length)
+                            self.generate_cont_time_series_data(fig_2, axs_2, normalize,
+                                                                sample_length)
                 else:
                     if self._train_y is None:
                         # Sample from the model by setting an initial seed
@@ -276,7 +301,8 @@ class RecurrentTraining(Training):
                 self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
                                train_loss, test_loss, train_accuracy, test_accuracy, log_freq)
                 if self._regression and fit_test_data:
-                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, inference=True)
+                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, normalize,
+                                       inference=True)
 
             # End of an epoch - Reset RNN layers
             self.reset_recurrent_layers()
@@ -290,5 +316,8 @@ class RecurrentTraining(Training):
 
         end_time = time.time()
         print("\nTraining Time: %.2f(s)" % (end_time - start_time))
+
+        # if plot is not None:
+        #     plt.close(fig)
 
         return training_logs_dict

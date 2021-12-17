@@ -55,7 +55,7 @@ class Momentum(PlainTraining, RecurrentTraining):
         return training_logs_dict
 
     def train_recurrent(self, X, y=None, batch_size=256, epochs=10000, sample_length=100,
-                        normalize=False, temperature=1.0, plot=None, fit_test_data=False,
+                        normalize=None, temperature=1.0, plot=None, fit_test_data=False,
                         log_freq=100):
         self.prepare_sequence_data(X, y, normalize)
 
@@ -63,8 +63,9 @@ class Momentum(PlainTraining, RecurrentTraining):
 
         training_logs_dict = \
             super().train_recurrent(batch_size=batch_size, epochs=epochs, plot=plot,
-                                    sample_length=sample_length, temperature=temperature,
-                                    fit_test_data=fit_test_data, log_freq=log_freq)
+                                    sample_length=sample_length, normalize=normalize,
+                                    temperature=temperature, fit_test_data=fit_test_data,
+                                    log_freq=log_freq)
         return training_logs_dict
 
     def update_network(self, t=None):

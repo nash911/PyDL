@@ -61,20 +61,30 @@ class Training(ABC):
             self._test_size = int(test_size)
 
         self._train_X = self._train_y = self._test_X = self._test_y = None
+        self._mean = self._std = None
         self._class_prob = None
         self._prediction_delta = None
 
     def mean_normalize(self, X, mean=None, std=None):
         if mean is None:
-            mean = np.mean(X, axis=0, keepdims=True)
+            self._mean = np.mean(X, axis=0, keepdims=True)
+            mean = self._mean
 
         if std is None:
-            std = np.std(X, axis=0, keepdims=True)
-            std[std == 0] = 1
+            self._std = np.std(X, axis=0, keepdims=True)
+            self._std[self._std == 0] = 1
+            std = self._std
 
         mean_centered = X - mean
         normalized = mean_centered / std
         return mean, std, normalized
+
+    def unnormalize_mean(self, X):
+        if self._mean is None or self._std is None:
+            sys.exit("Error: Mean/Std of the data is not calculated.")
+
+        unnormalized = (X * self._std) + self._mean
+        return unnormalized
 
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
         if mean is None:
