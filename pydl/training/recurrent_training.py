@@ -51,10 +51,7 @@ class RecurrentTraining(Training):
                 end = start + batch_size
             prediction = self._nn.forward(X[start:end], inference)
             if normalize is not None:
-                if normalize.lower() == 'mean':
-                    prediction = self.invert_mean_normalization(prediction)
-                elif 'min' in normalize.lower() and 'max' in normalize.lower():
-                    prediction = self.invert_min_max_normalization(prediction)
+                prediction = self.invert_normalization(prediction, normalize)
             test_pred.append(prediction)
             self.reset_recurrent_layers(hidden_state='previous_state')
         test_pred = np.concatenate(test_pred, axis=0)
@@ -63,10 +60,7 @@ class RecurrentTraining(Training):
         axs.clear()
 
         if normalize is not None:
-            if normalize.lower() == 'mean':
-                unnorm_X = self.invert_mean_normalization(X)
-            elif 'min' in normalize.lower() and 'max' in normalize.lower():
-                unnorm_X = self.invert_min_max_normalization(X)
+            unnorm_X = self.invert_normalization(X, normalize)
         else:
             unnorm_X = X
 
@@ -186,10 +180,7 @@ class RecurrentTraining(Training):
 
     def generate_cont_time_series_data(self, fig, axs, normalize=None, sample_length=500):
         if normalize is not None:
-            if normalize.lower() == 'mean':
-                train_X = self.invert_mean_normalization(self._train_X)
-            elif 'min' in normalize.lower() and 'max' in normalize.lower():
-                train_X = self.invert_min_max_normalization(self._train_X)
+            train_X = self.invert_normalization(self._train_X, normalize)
         else:
             train_X = self._train_X
 
@@ -205,10 +196,7 @@ class RecurrentTraining(Training):
                 else:
                     input = layer.forward(input, inference=True)
                     if normalize is not None:
-                        if normalize.lower() == 'mean':
-                            unnormalized_output = self.invert_mean_normalization(input)
-                        elif 'min' in normalize.lower() and 'max' in normalize.lower():
-                            unnormalized_output = self.invert_min_max_normalization(input)
+                        unnormalized_output = self.invert_normalization(input, normalize)
                     else:
                         unnormalized_output = input
                     sampled_data.append(unnormalized_output)
@@ -260,7 +248,7 @@ class RecurrentTraining(Training):
         init_train_l = self.batch_loss(train_X, train_y, batch_size, inference=False,
                                        hidden_state='previous_state', log_freq=log_freq)
         self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
-                       test_loss, train_accuracy, test_accuracy, log_freq)
+                       test_loss, train_accuracy, test_accuracy, log_freq, normalize)
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -315,7 +303,8 @@ class RecurrentTraining(Training):
 
             if (e + 1) % np.abs(log_freq) == 0:
                 self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
-                               train_loss, test_loss, train_accuracy, test_accuracy, log_freq)
+                               train_loss, test_loss, train_accuracy, test_accuracy, log_freq,
+                               normalize)
                 if self._regression and fit_test_data:
                     self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, normalize,
                                        inference=True)

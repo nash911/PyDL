@@ -126,6 +126,14 @@ class Training(ABC):
         unnormalized = (((X - a) * (self._X_max - self._X_min)) / (b - a)) + self._X_min
         return unnormalized
 
+    def invert_normalization(self, X, normalize=None):
+        if normalize.lower() == 'mean':
+            inverted_X = self.invert_mean_normalization(X)
+        elif 'min' in normalize.lower() and 'max' in normalize.lower():
+            inverted_X = self.invert_min_max_normalization(X)
+
+        return inverted_X
+
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
         if mean is None:
             mean = np.mean(X, axis=0, keepdims=True)
@@ -207,9 +215,9 @@ class Training(ABC):
 
         return train_X, train_y, test_X, test_y
 
-    def loss(self, X, y, inference=False, prob=None):
+    def loss(self, X, y, inference=False, prob=None, normalize=None):
         if self._regression:
-            return self.mse_loss(X, y, inference, pred=prob)
+            return self.mse_loss(X, y, inference, pred=prob, normalize=normalize)
         else:
             if 'softmax' in self._activatin_type.lower():
                 return self.softmax_cross_entropy_loss(X, y, inference, prob)
@@ -229,11 +237,15 @@ class Training(ABC):
             else:
                 sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
-    def mse_loss(self, X, y, inference=False, pred=None):
+    def mse_loss(self, X, y, inference=False, pred=None, normalize=None):
         if pred is None:
             prediction = self._nn.forward(X, inference)
         else:
             prediction = pred
+
+        if normalize is not None:
+            y = self.invert_normalization(y, normalize)
+            prediction = self.invert_normalization(prediction, normalize)
 
         #        1  m
         # MSE = --- ∑ (ŷᵢ - yᵢ)²
@@ -378,7 +390,8 @@ class Training(ABC):
         self._class_prob = None
         return loss_grad / y.shape[0]
 
-    def batch_loss(self, X, y, batch_size=None, inference=True, hidden_state=None, log_freq=1):
+    def batch_loss(self, X, y, batch_size=None, inference=True, normalize=None, hidden_state=None,
+                   log_freq=1):
         if batch_size is None:
             batch_size = X.shape[0]
         num_batches = int(np.ceil(X.shape[0] / batch_size))
@@ -395,7 +408,7 @@ class Training(ABC):
                 end = X.shape[0]
             else:
                 end = start + batch_size
-            batch_l.append(self.loss(X[start:end], y[start:end], inference))
+            batch_l.append(self.loss(X[start:end], y[start:end], inference, normalize=normalize))
             self.reset_recurrent_layers(hidden_state=hidden_state)
 
         return np.mean(batch_l)
@@ -454,7 +467,7 @@ class Training(ABC):
         plt.pause(0.01)
 
     def print_log(self, epoch, plot, fig, axs, batch_size, train_l, epochs_list, train_loss,
-                  test_loss, train_accuracy, test_accuracy, log_freq=1):
+                  test_loss, train_accuracy, test_accuracy, log_freq=1, normalize=None):
         if self._train_y is None or self._test_y is None:
             train_X = self._train_X[:-1]
             train_y = self._train_X[1:]
@@ -473,11 +486,12 @@ class Training(ABC):
 
             hidden_state = None
 
-        test_l = self.batch_loss(test_X, test_y, batch_size, inference=True,
+        test_l = self.batch_loss(test_X, test_y, batch_size, inference=True, normalize=normalize,
                                  hidden_state=hidden_state, log_freq=log_freq)
         if self._regression:
-            train_l = self.batch_loss(train_X, train_y, batch_size, inference=True,
-                                      hidden_state=hidden_state, log_freq=log_freq)
+            train_l = \
+                self.batch_loss(train_X, train_y, batch_size, inference=True, normalize=normalize,
+                                hidden_state=hidden_state, log_freq=log_freq)
             train_accur = np.sqrt(train_l)
             test_accur = np.sqrt(test_l)
         else:  # Classification
