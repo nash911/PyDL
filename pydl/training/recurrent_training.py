@@ -52,7 +52,9 @@ class RecurrentTraining(Training):
             prediction = self._nn.forward(X[start:end], inference)
             if normalize is not None:
                 if normalize.lower() == 'mean':
-                    prediction = self.unnormalize_mean(prediction)
+                    prediction = self.invert_mean_normalization(prediction)
+                elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                    prediction = self.invert_min_max_normalization(prediction)
             test_pred.append(prediction)
             self.reset_recurrent_layers(hidden_state='previous_state')
         test_pred = np.concatenate(test_pred, axis=0)
@@ -62,7 +64,9 @@ class RecurrentTraining(Training):
 
         if normalize is not None:
             if normalize.lower() == 'mean':
-                unnorm_X = self.unnormalize_mean(X)
+                unnorm_X = self.invert_mean_normalization(X)
+            elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                unnorm_X = self.invert_min_max_normalization(X)
         else:
             unnorm_X = X
 
@@ -126,6 +130,10 @@ class RecurrentTraining(Training):
                     # Mean Normalize data
                     mean, std, self._train_X = self.mean_normalize(self._train_X)
                     _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+                elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                    # Min-Max Normalize data
+                    min, max, self._train_X = self.min_max_normalize(self._train_X)
+                    _, _, self._test_X = self.min_max_normalize(self._test_X, min, max)
         else:
             if self._regression:
                 self._train_X = X[:train_size]
@@ -136,6 +144,10 @@ class RecurrentTraining(Training):
                         # Mean Normalize data
                         mean, std, self._train_X = self.mean_normalize(self._train_X)
                         _, _, self._test_X = self.mean_normalize(self._test_X, mean, std)
+                    elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                        # Min-Max Normalize data
+                        min, max, self._train_X = self.min_max_normalize(self._train_X)
+                        _, _, self._test_X = self.min_max_normalize(self._test_X, min, max)
             else:
                 self.prepare_character_data(X)
 
@@ -175,7 +187,9 @@ class RecurrentTraining(Training):
     def generate_cont_time_series_data(self, fig, axs, normalize=None, sample_length=500):
         if normalize is not None:
             if normalize.lower() == 'mean':
-                train_X = self.unnormalize_mean(self._train_X)
+                train_X = self.invert_mean_normalization(self._train_X)
+            elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                train_X = self.invert_min_max_normalization(self._train_X)
         else:
             train_X = self._train_X
 
@@ -192,7 +206,9 @@ class RecurrentTraining(Training):
                     input = layer.forward(input, inference=True)
                     if normalize is not None:
                         if normalize.lower() == 'mean':
-                            unnormalized_output = self.unnormalize_mean(input)
+                            unnormalized_output = self.invert_mean_normalization(input)
+                        elif 'min' in normalize.lower() and 'max' in normalize.lower():
+                            unnormalized_output = self.invert_min_max_normalization(input)
                     else:
                         unnormalized_output = input
                     sampled_data.append(unnormalized_output)

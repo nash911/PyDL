@@ -44,7 +44,7 @@ def main():
 
     # show the figure
     plt.draw()
-    plt.waitforbuttonpress(0)
+    plt.waitforbuttonpress(10)
     plt.close()
 
     l1 = RNN(X, num_neurons=5, bias=True, seq_len=seq_len, weight_scale=weight_scale, xavier=True,
@@ -58,7 +58,7 @@ def main():
     momentum = Momentum(nn, step_size=1e-2, mu=0.5, reg_lambda=0, train_size=90, test_size=10,
                         regression=True)
     momentum.train_recurrent(X, batch_size=seq_len, epochs=100, sample_length=1000, log_freq=1,
-                             fit_test_data=True, plot='Sinusoid-RNN - Momentum')
+                             normalize=None, fit_test_data=True, plot='Sinusoid-RNN - Momentum')
 
     input("Press Enter to continue...")
 

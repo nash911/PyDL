@@ -11,6 +11,7 @@ from abc import ABC
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import warnings
 
 from pydl import conf
 
@@ -61,29 +62,68 @@ class Training(ABC):
             self._test_size = int(test_size)
 
         self._train_X = self._train_y = self._test_X = self._test_y = None
-        self._mean = self._std = None
+        self._X_mean = self._X_std = None
+        self._X_min = self._X_max = None
+        self._scale_range = np.array([-1, 1], dtype=conf.dtype)
+
         self._class_prob = None
         self._prediction_delta = None
 
     def mean_normalize(self, X, mean=None, std=None):
         if mean is None:
-            self._mean = np.mean(X, axis=0, keepdims=True)
-            mean = self._mean
+            if self._X_mean is not None:
+                warnings.warn("\nWARNING! Calculating data mean for normalization, while " +
+                              "precalculated X-mean exists!")
+            self._X_mean = np.mean(X, axis=0, keepdims=True)
+            mean = self._X_mean
 
         if std is None:
-            self._std = np.std(X, axis=0, keepdims=True)
-            self._std[self._std == 0] = 1
-            std = self._std
+            if self._X_std is not None:
+                warnings.warn("\nWARNING! Calculating data std for normalization, while " +
+                              "precalculated X-std exists!")
+            self._X_std = np.std(X, axis=0, keepdims=True)
+            self._X_std[self._X_std == 0] = 1
+            std = self._X_std
 
         mean_centered = X - mean
         normalized = mean_centered / std
         return mean, std, normalized
 
-    def unnormalize_mean(self, X):
-        if self._mean is None or self._std is None:
+    def invert_mean_normalization(self, X):
+        if self._X_mean is None or self._X_std is None:
             sys.exit("Error: Mean/Std of the data is not calculated.")
 
-        unnormalized = (X * self._std) + self._mean
+        unnormalized = (X * self._X_std) + self._X_mean
+        return unnormalized
+
+    def min_max_normalize(self, X, min=None, max=None):
+        if min is None:
+            if self._X_min is not None:
+                warnings.warn("\nWARNING! Calculating data min for normalization, while " +
+                              "precalculated X-min exists!")
+            self._X_min = np.min(X, axis=0, keepdims=True)
+            min = self._X_min
+
+        if max is None:
+            if self._X_max is not None:
+                warnings.warn("\nWARNING! Calculating data max for normalization, while " +
+                              "precalculated X-max exists!")
+            self._X_max = np.max(X, axis=0, keepdims=True)
+            max = self._X_max
+
+        a = self._scale_range[0]
+        b = self._scale_range[1]
+
+        normalized = a + (((X - min) * (b - a)) / (max - min))
+        return min, max, normalized
+
+    def invert_min_max_normalization(self, X):
+        if self._X_min is None or self._X_max is None:
+            sys.exit("Error: Min/Max of the data is not calculated.")
+
+        a = self._scale_range[0]
+        b = self._scale_range[1]
+        unnormalized = (((X - a) * (self._X_max - self._X_min)) / (b - a)) + self._X_min
         return unnormalized
 
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
