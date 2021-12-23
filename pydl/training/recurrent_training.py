@@ -185,6 +185,7 @@ class RecurrentTraining(Training):
             train_X = self._train_X
 
         input = train_X[-1].reshape(1, -1)
+        sample_length = self._test_X.shape[0] - 1
 
         sampled_data = [input]
         for n in range(sample_length):
@@ -201,6 +202,14 @@ class RecurrentTraining(Training):
                         unnormalized_output = input
                     sampled_data.append(unnormalized_output)
 
+        if normalize is not None:
+            y = self.invert_normalization(self._test_X, normalize)
+        else:
+            y = self._test_X
+        generation_accuracy = np.round(np.sqrt(0.5 * np.mean(np.square(y - sampled_data))),
+                                       decimals=4)
+        print("generation_accuracy: ", generation_accuracy)
+
         sampled_data = np.concatenate(sampled_data, axis=0)
         data = np.vstack((train_X, sampled_data))
         train_size = train_X.shape[0]
@@ -211,6 +220,23 @@ class RecurrentTraining(Training):
             axs.plot(list(range(train_size)), data[:train_size, c], linestyle='-', color=colors[c])
             axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
                      color=colors[c])
+
+        # sampled_data = np.concatenate(sampled_data, axis=0)
+        # data = np.vstack((train_X, y, sampled_data))
+        # train_size = train_X.shape[0]
+        # data_size = train_X.shape[0] + y.shape[0]
+        #
+        # colors = ['red', 'blue', 'green', 'purple', 'orange']
+        # axs.clear()
+        # for c in range(data.shape[-1]):
+        #     axs.plot(list(range(data_size)), data[:data_size, c], linestyle='-', color=colors[c])
+        #     axs.plot(list(range(train_size, data_size)), data[data_size:, c], linestyle=':',
+        #              color=colors[c])
+
+        x_min, x_max = axs.get_xlim()
+        y_min, y_max = axs.get_ylim()
+        axs.text((x_max * 0.75), (y_max + 0.1), ('RMSE=%s' % str(generation_accuracy)),
+                 fontsize=15)
 
         plt.show(block=False)
         plt.pause(0.01)
