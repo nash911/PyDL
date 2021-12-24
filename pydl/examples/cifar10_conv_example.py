@@ -97,7 +97,7 @@ def main():
     nn = NN(X, layers)
     adam = Adam(nn, step_size=1e-2, beta_1=0.9, beta_2=0.999, reg_lambda=1e-3, train_size=50000,
                 test_size=10000)
-    adam.train(X, y, normalize='mean', shuffle=False, batch_size=16, epochs=10000, log_freq=-1,
+    adam.train(X, y, normalize='mean', shuffle=False, batch_size=16, epochs=10000, log_freq=1,
                plot='MNIST - Adam - Dropout')
 
     input("Press Enter to continue...")

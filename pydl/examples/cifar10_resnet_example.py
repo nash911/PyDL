@@ -235,7 +235,7 @@ def main():
 
     momentum = Momentum(nn, step_size=1e-1, mu=0.9, reg_lambda=1e-4, train_size=50000,
                         test_size=10000)
-    momentum.train(X, y, normalize='mean', shuffle=False, batch_size=128, epochs=1000, log_freq=-1,
+    momentum.train(X, y, normalize='mean', shuffle=False, batch_size=128, epochs=1000, log_freq=1,
                    plot='MNIST - ResNet - Momentum')
 
     input("Press Enter to continue...")
