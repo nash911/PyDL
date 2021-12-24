@@ -44,7 +44,7 @@ def main():
     fig = plt.figure()
     plt.scatter(X[:, 0], X[:, 1], c=y, s=40, cmap=plt.cm.Spectral)
     plt.draw()
-    plt.waitforbuttonpress(0)
+    plt.waitforbuttonpress(10)
     plt.close(fig)
 
     # SoftMax Cross Entropy - SGD

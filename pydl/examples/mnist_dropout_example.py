@@ -34,7 +34,7 @@ def main():
 
     # show the figure
     plt.draw()
-    plt.waitforbuttonpress(0)
+    plt.waitforbuttonpress(10)
     plt.close(fig)
 
     weight_scale = 1.0
