@@ -131,7 +131,7 @@ class RecurrentTraining(Training):
         else:
             if self._regression:
                 self._train_X = X[:train_size]
-                self._test_X = X[train_size:]
+                self._test_X = X[train_size - 1:]  # Since yᵢ = Xᵢ-₁
 
                 if normalize is not None:
                     if normalize.lower() == 'mean':
@@ -179,20 +179,15 @@ class RecurrentTraining(Training):
         return sampled_text
 
     def generate_cont_time_series_data(self, fig, axs, normalize=None, sample_length=500):
-        if normalize is not None:
-            train_X = self.invert_normalization(self._train_X, normalize)
-        else:
-            train_X = self._train_X
-
-        input = train_X[-1].reshape(1, -1)
+        input = self._test_X[0].reshape(1, -1)
         sample_length = self._test_X.shape[0] - 1
 
-        sampled_data = [input]
+        sampled_data = list()
         for n in range(sample_length):
             for layer in self._nn.layers:
                 if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                     input = np.copy(layer.forward(input, inference=True)[1])
-                    # Set previous hidden state (h_t-1) to current hidden state output (h_t)
+                    # Set previous hidden state (hₜ-₁) to current hidden state output (hₜ)
                     layer.reset_internal_states('previous_state')
                 else:
                     input = layer.forward(input, inference=True)
@@ -202,15 +197,21 @@ class RecurrentTraining(Training):
                         unnormalized_output = input
                     sampled_data.append(unnormalized_output)
 
+        sampled_data = np.vstack(sampled_data)
+
         if normalize is not None:
-            y = self.invert_normalization(self._test_X, normalize)
+            y = self.invert_normalization(self._test_X[1:], normalize)
         else:
-            y = self._test_X
+            y = self._test_X[1:]
         generation_accuracy = np.round(np.sqrt(0.5 * np.mean(np.square(y - sampled_data))),
                                        decimals=4)
         print("generation_accuracy: ", generation_accuracy)
 
-        sampled_data = np.concatenate(sampled_data, axis=0)
+        if normalize is not None:
+            train_X = self.invert_normalization(self._train_X, normalize)
+        else:
+            train_X = self._train_X
+
         data = np.vstack((train_X, sampled_data))
         train_size = train_X.shape[0]
 
@@ -221,7 +222,6 @@ class RecurrentTraining(Training):
             axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
                      color=colors[c])
 
-        # sampled_data = np.concatenate(sampled_data, axis=0)
         # data = np.vstack((train_X, y, sampled_data))
         # train_size = train_X.shape[0]
         # data_size = train_X.shape[0] + y.shape[0]
