@@ -66,8 +66,8 @@ class PlainTraining(Training):
         test_accuracy = list()
         num_batches = int(np.ceil(self._train_X.shape[0] / batch_size))
 
-        init_train_l = self.batch_loss(self._train_X, self._train_y, batch_size, inference=False,
-                                       log_freq=log_freq)
+        init_train_l = self.batch_loss(self._train_X, self._train_y, batch_size=batch_size,
+                                       inference=False, log_freq=log_freq)
         self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
                        test_loss, train_accuracy, test_accuracy, log_freq)
 
