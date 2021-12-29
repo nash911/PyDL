@@ -67,8 +67,8 @@ def main():
 
     momentum = Momentum(nn, step_size=1e-2, mu=0.5, reg_lambda=0, train_size=75, test_size=25,
                         regression=True)
-    momentum.train_recurrent(X, batch_size=seq_len, epochs=500, sample_length=1000, log_freq=1,
-                             normalize='minmax', data_diff=False, fit_test_data=True,
+    momentum.train_recurrent(X, batch_size=seq_len, epochs=100, sample_length=1000, log_freq=1,
+                             normalize='minmax', data_diff=True, fit_test_data=True,
                              plot='Sinusoid-LSTM - Momentum')
 
     input("Press Enter to continue...")

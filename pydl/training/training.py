@@ -434,8 +434,8 @@ class Training(ABC):
                 end = start + batch_size
 
             batch_l.append(self.loss(X[start:end], y[start:end],
-                                     (None if y_raw is None else y_raw[start:end]),
                                      (None if y_raw is None else y_raw[(start + 1):(end + 1)]),
+                                     (None if y_raw is None else y_raw[(start):(end)]),
                                      inference, normalize=normalize))
 
             self.reset_recurrent_layers(hidden_state=hidden_state)
