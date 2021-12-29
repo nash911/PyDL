@@ -34,10 +34,15 @@ class RecurrentTraining(Training):
             if layer.type in ['RNN_Layer', 'LSTM_Layer', 'GRU_Layer']:
                 layer.reset_internal_states(hidden_state)
 
-    def fit_test_data(self, X, fig, axs, batch_size=None, normalize=None, inference=True):
+    def fit_test_data(self, X, fig, axs, batch_size=None, normalize=None, data_diff=False,
+                      inference=True):
         if batch_size is None:
-            batch_size = X.shape[0]
-        num_batches = int(np.ceil(X.shape[0] / batch_size))
+            batch_size = X[:-1].shape[0]
+        num_batches = int(np.ceil(X[:-1].shape[0] / batch_size))
+
+        if data_diff:
+            train_size = self.train_size(self._X_raw[:-1])
+            test_size = X[1:].shape[0]
 
         # # Reset hidden state of RNN layers, if any
         # self.reset_recurrent_layers()
@@ -46,12 +51,22 @@ class RecurrentTraining(Training):
         for i in range(num_batches):
             start = int(batch_size * i)
             if i == num_batches - 1:
-                end = X.shape[0]
+                end = X[:-1].shape[0]
             else:
                 end = start + batch_size
+
             prediction = self._nn.forward(X[start:end], inference)
+
+            # Invert Normalization on prediction
             if normalize is not None:
                 prediction = self.invert_normalization(prediction, normalize)
+
+            # Invert data differencing on prediction
+            if data_diff:
+                start += train_size + 1
+                end += train_size + 1
+                prediction = self.invert_difference(self._X_raw[start:end], prediction)
+
             test_pred.append(prediction)
             self.reset_recurrent_layers(hidden_state='previous_state')
         test_pred = np.concatenate(test_pred, axis=0)
@@ -59,14 +74,19 @@ class RecurrentTraining(Training):
         colors = ['red', 'blue', 'green', 'purple', 'orange']
         axs.clear()
 
+        # Invert Normalization on labels (y)
         if normalize is not None:
-            unnorm_X = self.invert_normalization(X, normalize)
+            unnorm_y = self.invert_normalization(X, normalize)
         else:
-            unnorm_X = X
+            unnorm_y = X
+
+        # Invert data differencing on labels (y)
+        if data_diff:
+            unnorm_y = self._X_raw[-test_size:]
 
         for c in range(X.shape[-1]):
-            axs.plot(unnorm_X[1:, c], linestyle='-', color=colors[c])
-            axs.plot(test_pred[:-1, c], '.', color=colors[c])
+            axs.plot(unnorm_y[:, c], linestyle='-', color=colors[c])
+            axs.plot(test_pred[:, c], '.', color=colors[c])
 
         plt.show(block=False)
         plt.pause(0.01)
@@ -80,8 +100,7 @@ class RecurrentTraining(Training):
         self._char_to_idx = {ch: i for i, ch in enumerate(unique_chars)}
         self._idx_to_char = {i: ch for i, ch in enumerate(unique_chars)}
 
-        train_size = int(data_size * self._train_size) if self._train_size <= 1.0 else \
-            self._train_size
+        train_size = self.train_size(X)
         test_size = data_size - train_size
 
         self._train_X = np.zeros((train_size, K), dtype=conf.dtype)
@@ -95,11 +114,9 @@ class RecurrentTraining(Training):
         for k, v in self._idx_to_char.items():
             print("%d: %s" % (k, v))
 
-    def prepare_sequence_data(self, X, y=None, normalize=None):
+    def prepare_sequence_data(self, X, y=None, normalize=None, data_diff=False):
         try:
-            data_size = X.shape[0]
-            train_size = int(data_size * self._train_size) if self._train_size <= 1.0 else \
-                self._train_size
+            train_size = self.train_size(X)
         except AttributeError:
             # Character data
             self.prepare_character_data(X)
@@ -130,6 +147,11 @@ class RecurrentTraining(Training):
                     _, _, self._test_X = self.min_max_normalize(self._test_X, min, max)
         else:
             if self._regression:
+                # Represent data {X, y} as the difference between consecutive data points
+                if data_diff:
+                    X = self.convert_to_difference(X)
+                    train_size = self.train_size(X)
+
                 self._train_X = X[:train_size]
                 self._test_X = X[train_size - 1:]  # Since yᵢ = Xᵢ-₁
 
@@ -244,7 +266,8 @@ class RecurrentTraining(Training):
         return
 
     def train_recurrent(self, batch_size=256, epochs=1000, sample_length=100, normalize=None,
-                        temperature=1.0, plot=None, fit_test_data=False, log_freq=100):
+                        data_diff=False, temperature=1.0, plot=None, fit_test_data=False,
+                        log_freq=100):
         start_time = time.time()
 
         if plot is not None:
@@ -271,10 +294,10 @@ class RecurrentTraining(Training):
         test_accuracy = list()
         num_batches = int(np.ceil(train_X.shape[0] / batch_size))
 
-        init_train_l = self.batch_loss(train_X, train_y, batch_size, inference=False,
+        init_train_l = self.batch_loss(train_X, train_y, batch_size=batch_size, inference=True,
                                        hidden_state='previous_state', log_freq=log_freq)
         self.print_log(0, plot, fig, axs, batch_size, init_train_l, epochs_list, train_loss,
-                       test_loss, train_accuracy, test_accuracy, log_freq, normalize)
+                       test_loss, train_accuracy, test_accuracy, log_freq, normalize, data_diff)
 
         for e in range(epochs):
             for i in range(num_batches):
@@ -330,9 +353,9 @@ class RecurrentTraining(Training):
             if (e + 1) % np.abs(log_freq) == 0:
                 self.print_log((e + 1), plot, fig, axs, batch_size, train_l, epochs_list,
                                train_loss, test_loss, train_accuracy, test_accuracy, log_freq,
-                               normalize)
+                               normalize, data_diff)
                 if self._regression and fit_test_data:
-                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, normalize,
+                    self.fit_test_data(self._test_X, fig_3, axs_3, batch_size, normalize, data_diff,
                                        inference=True)
 
             # End of an epoch - Reset RNN layers
