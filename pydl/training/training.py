@@ -144,8 +144,8 @@ class Training(ABC):
         self._X_raw = X
         return X[step:] - X[:-step]
 
-    def invert_difference(self, X_raw, diff):
-        return X_raw + diff
+    def invert_difference(self, offset, diff):
+        return offset + diff
 
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
         if mean is None:
@@ -228,9 +228,10 @@ class Training(ABC):
 
         return train_X, train_y, test_X, test_y
 
-    def loss(self, X, y, y_raw=None, pred_diff=None, inference=False, prob=None, normalize=None):
+    def loss(self, X, y, y_raw=None, pred_offset=None, inference=False, prob=None, normalize=None):
         if self._regression:
-            return self.mse_loss(X, y, y_raw, pred_diff, inference, pred=prob, normalize=normalize)
+            return self.mse_loss(X, y, y_raw, pred_offset, inference, pred=prob,
+                                 normalize=normalize)
         else:
             if 'softmax' in self._activatin_type.lower():
                 return self.softmax_cross_entropy_loss(X, y, inference, prob)
@@ -250,7 +251,7 @@ class Training(ABC):
             else:
                 sys.exit("Error: Unknown activation_type: ", self._activation_fn)
 
-    def mse_loss(self, X, y, y_raw=None, pred_diff=None, inference=False, pred=None,
+    def mse_loss(self, X, y, y_raw=None, pred_offset=None, inference=False, pred=None,
                  normalize=None):
         if pred is None:
             prediction = self._nn.forward(X, inference)
@@ -268,8 +269,8 @@ class Training(ABC):
                 y = y_raw
 
             # Invert data differencing on prediction
-            if pred_diff is not None:
-                prediction = self.invert_difference(pred_diff, prediction)
+            if pred_offset is not None:
+                prediction = self.invert_difference(pred_offset, prediction)
 
         #        1  m
         # MSE = --- ∑ (ŷᵢ - yᵢ)²

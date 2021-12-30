@@ -42,7 +42,7 @@ class RecurrentTraining(Training):
 
         if data_diff:
             train_size = self.train_size(self._X_raw[:-1])
-            test_size = X[1:].shape[0]
+            test_size = X[:-1].shape[0]
 
         # # Reset hidden state of RNN layers, if any
         # self.reset_recurrent_layers()
