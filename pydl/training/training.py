@@ -203,7 +203,10 @@ class Training(ABC):
                      "function call Training.shuffle_split_data().")
 
         if self._regression:
-            labels = np.reshape(y, newshape=(-1, 1))
+            if len(y.shape) == 1:
+                labels = np.reshape(y, newshape=(-1, 1))
+            else:
+                labels = y
         elif self._binary_classification:
             if len(y.shape) == 1:
                 labels = np.reshape(y, newshape=(-1, 1))
