@@ -63,8 +63,8 @@ class RecurrentTraining(Training):
 
             # Invert data differencing on prediction
             if data_diff:
-                start += train_size + 1
-                end += train_size + 1
+                start += train_size
+                end += train_size
                 prediction = self.invert_difference(self._X_raw[start:end], prediction)
 
             test_pred.append(prediction)
@@ -76,9 +76,9 @@ class RecurrentTraining(Training):
 
         # Invert Normalization on labels (y)
         if normalize is not None:
-            unnorm_y = self.invert_normalization(X, normalize)
+            unnorm_y = self.invert_normalization(X[1:], normalize)
         else:
-            unnorm_y = X
+            unnorm_y = X[1:]
 
         # Invert data differencing on labels (y)
         if data_diff:
@@ -200,9 +200,13 @@ class RecurrentTraining(Training):
 
         return sampled_text
 
-    def generate_cont_time_series_data(self, fig, axs, normalize=None, sample_length=500):
+    def generate_cont_time_series_data(self, fig, axs, normalize=None, data_diff=False,
+                                       sample_length=500):
         input = self._test_X[0].reshape(1, -1)
         sample_length = self._test_X.shape[0] - 1
+
+        if data_diff:
+            train_size = self.train_size(self._X_raw[:-1])
 
         sampled_data = list()
         for n in range(sample_length):
@@ -213,11 +217,12 @@ class RecurrentTraining(Training):
                     layer.reset_internal_states('previous_state')
                 else:
                     input = layer.forward(input, inference=True)
-                    if normalize is not None:
-                        unnormalized_output = self.invert_normalization(input, normalize)
-                    else:
-                        unnormalized_output = input
-                    sampled_data.append(unnormalized_output)
+                    if 'output' in layer.name.lower():
+                        if normalize is not None:
+                            unnormalized_output = self.invert_normalization(input, normalize)
+                        else:
+                            unnormalized_output = input
+                        sampled_data.append(unnormalized_output)
 
         sampled_data = np.vstack(sampled_data)
 
@@ -225,6 +230,11 @@ class RecurrentTraining(Training):
             y = self.invert_normalization(self._test_X[1:], normalize)
         else:
             y = self._test_X[1:]
+
+        if data_diff:
+            y = self._X_raw[(train_size + 1):]
+            sampled_data = self.invert_difference(self._X_raw[train_size:-1], sampled_data)
+
         generation_accuracy = np.round(np.sqrt(0.5 * np.mean(np.square(y - sampled_data))),
                                        decimals=4)
         print("generation_accuracy: ", generation_accuracy)
@@ -234,26 +244,31 @@ class RecurrentTraining(Training):
         else:
             train_X = self._train_X
 
-        data = np.vstack((train_X, sampled_data))
-        train_size = train_X.shape[0]
+        if data_diff:
+            train_X = self._X_raw[1:(train_size + 1)]
 
-        colors = ['red', 'blue', 'green', 'purple', 'orange']
-        axs.clear()
-        for c in range(data.shape[-1]):
-            axs.plot(list(range(train_size)), data[:train_size, c], linestyle='-', color=colors[c])
-            axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
-                     color=colors[c])
-
-        # data = np.vstack((train_X, y, sampled_data))
+        # data = np.vstack((train_X, self._X_raw[train_size], sampled_data))
         # train_size = train_X.shape[0]
-        # data_size = train_X.shape[0] + y.shape[0]
         #
         # colors = ['red', 'blue', 'green', 'purple', 'orange']
         # axs.clear()
         # for c in range(data.shape[-1]):
-        #     axs.plot(list(range(data_size)), data[:data_size, c], linestyle='-', color=colors[c])
-        #     axs.plot(list(range(train_size, data_size)), data[data_size:, c], linestyle=':',
+        #     axs.plot(list(range(1, (train_size + 1))), data[:train_size, c], linestyle='-',
         #              color=colors[c])
+        #     axs.plot(list(range(train_size, data.shape[0])), data[train_size:, c], linestyle=':',
+        #              color=colors[c])
+
+        data = np.vstack((train_X, y, sampled_data))
+        train_size = train_X.shape[0]
+        data_size = train_X.shape[0] + y.shape[0]
+
+        colors = ['red', 'blue', 'green', 'purple', 'orange']
+        axs.clear()
+        for c in range(data.shape[-1]):
+            axs.plot(list(range(1, (data_size + 1))), data[:data_size, c], linestyle='-',
+                     color=colors[c])
+            axs.plot(list(range((train_size + 1), (data_size + 1))), data[data_size:, c],
+                     linestyle=':', color=colors[(c + 1)])
 
         x_min, x_max = axs.get_xlim()
         y_min, y_max = axs.get_ylim()
@@ -342,7 +357,7 @@ class RecurrentTraining(Training):
                         # Generate continuous time series data starting from the last training
                         # data point
                         sampled_text = \
-                            self.generate_cont_time_series_data(fig_2, axs_2, normalize,
+                            self.generate_cont_time_series_data(fig_2, axs_2, normalize, data_diff,
                                                                 sample_length)
                 else:
                     if self._train_y is None:
