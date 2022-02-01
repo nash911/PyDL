@@ -15,6 +15,8 @@ import itertools
 from pydl.nn.layers import FC
 from pydl import conf
 
+np.random.seed(11421111)
+
 
 class TestLayers(unittest.TestCase):
     def test_score_fn(self):
@@ -53,9 +55,13 @@ class TestLayers(unittest.TestCase):
             test(X, w, true_out + bias, bias)
 
     def test_forward(self):
-        def test(inp, w, true_out, bias=False, actv_fn='Sigmoid', bchnorm=False, p=None, mask=None):
+        def test(inp, w, true_out, bias=False, actv_fn='Sigmoid', bchnorm=False, bn_mean=None,
+                 bn_var=None, infrnc=False, p=None, mask=None):
             fc = FC(inp, w.shape[-1], w, bias, activation_fn=actv_fn, batchnorm=bchnorm, dropout=p)
-            out_fc = fc.forward(inp, mask=mask)
+            if bchnorm and infrnc:
+                fc.batchnorm.avg_mean = bn_mean
+                fc.batchnorm.avg_var = bn_var
+            out_fc = fc.forward(inp, inference=infrnc, mask=mask)
             npt.assert_almost_equal(out_fc, true_out, decimal=5)
 
         # Manually calculated
@@ -79,17 +85,27 @@ class TestLayers(unittest.TestCase):
         num_neurons = [1, 2, 3, 6, 11]
         scale = [1e-6, 1e-3, 1e-1, 1e-0, 2]
         batchnorm = [True, False]
+        inference = [True, False]
         dropout = [True, False]
 
-        for batch, feat, scl, neur, bn, dout in \
+        for batch, feat, scl, neur, bn, infrnc, dout in \
             list(itertools.product(batch_size, feature_size, scale, num_neurons, batchnorm,
-                 dropout)):
+                 inference, dropout)):
             X = np.random.uniform(-scl, scl, (batch, feat))
             w = np.random.randn(feat, neur) * scl
             bias = np.zeros(neur)
+            bn_mean = None
+            bn_var = None
             score = np.matmul(X, w) + bias
+
             if bn:
-                score = (score - np.mean(score, axis=0)) / np.sqrt(np.var(score, axis=0) + 1e-32)
+                if infrnc:
+                    bn_mean = np.ones(neur) * np.random.uniform(0.001, 2)
+                    bn_var = np.ones(neur) * np.random.uniform(0.001, 2)
+                    score = (score - bn_mean) / np.sqrt(bn_var + 1e-32)
+                else:
+                    score = \
+                        (score - np.mean(score, axis=0)) / np.sqrt(np.var(score, axis=0) + 1e-32)
 
             if dout:
                 p = np.random.rand()
@@ -100,35 +116,55 @@ class TestLayers(unittest.TestCase):
 
             true_out_sig = 1.0 / (1.0 + np.exp(-np.matmul(X, w)))
             if dout:
-                true_out_sig *= mask
-            test(X, w, true_out_sig, bias=False, actv_fn='Sigmoid', bchnorm=False, p=p, mask=mask)
+                if infrnc:
+                    true_out_sig *= p
+                else:
+                    true_out_sig *= mask
+            test(X, w, true_out_sig, bias=False, actv_fn='Sigmoid', bchnorm=False, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
             true_out_sig = 1.0 / (1.0 + np.exp(-score))
             if dout:
-                true_out_sig *= mask
-            test(X, w, true_out_sig, bias, actv_fn='Sigmoid', bchnorm=bn, p=p, mask=mask)
+                if infrnc:
+                    true_out_sig *= p
+                else:
+                    true_out_sig *= mask
+            test(X, w, true_out_sig, bias, actv_fn='Sigmoid', bchnorm=bn, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
             true_out_tanh = (2.0 / (1.0 + np.exp(-2.0 * score))) - 1.0
             if dout:
-                true_out_tanh *= mask
-            test(X, w, true_out_tanh, bias, actv_fn='Tanh', bchnorm=bn, p=p, mask=mask)
+                if infrnc:
+                    true_out_tanh *= p
+                else:
+                    true_out_tanh *= mask
+            test(X, w, true_out_tanh, bias, actv_fn='Tanh', bchnorm=bn, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
             unnorm_prob = np.exp(score)
             true_out_softmax = unnorm_prob / np.sum(unnorm_prob, axis=-1, keepdims=True)
             if dout:
-                true_out_softmax *= mask
-            test(X, w, true_out_softmax, bias, actv_fn='Softmax', bchnorm=bn, p=p, mask=mask)
+                if infrnc:
+                    true_out_softmax *= p
+                else:
+                    true_out_softmax *= mask
+            test(X, w, true_out_softmax, bias, actv_fn='Softmax', bchnorm=bn, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
             true_out_relu = np.maximum(0, score)
             if dout:
-                mask /= p
-                true_out_relu *= mask
-            test(X, w, true_out_relu, bias, actv_fn='ReLU', bchnorm=bn, p=p, mask=mask)
+                if not infrnc:
+                    mask /= p
+                    true_out_relu *= mask
+            test(X, w, true_out_relu, bias, actv_fn='ReLU', bchnorm=bn, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
             true_out_linear = score
             if dout:
-                true_out_linear *= mask
-            test(X, w, true_out_linear, bias, actv_fn='Linear', bchnorm=bn, p=p, mask=mask)
+                if not infrnc:
+                    true_out_linear *= mask
+            test(X, w, true_out_linear, bias, actv_fn='Linear', bchnorm=bn, bn_mean=bn_mean,
+                 bn_var=bn_var, infrnc=infrnc, p=p, mask=mask)
 
     def test_gradients_manually(self):
         def test(inp, w, inp_grad, true_weights_grad, true_inputs_grad, bias=False,

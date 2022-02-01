@@ -15,7 +15,7 @@ from pydl import conf
 class BatchNorm(object):
     """The Batch Norm Class."""
 
-    def __init__(self, gamma=None, beta=None, feature_size=None, name=None):
+    def __init__(self, gamma=None, beta=None, feature_size=None, momentum=0.99, name=None):
         if gamma is not None:
             self._gamma = gamma
         elif feature_size is not None:
@@ -32,6 +32,12 @@ class BatchNorm(object):
             sys.exit("Error: Please provide either initial beta params of feature_size while " +
                      "initiating Batchorm object")
 
+        self._momentum = momentum if type(momentum) in ['int', 'float'] else 0.99
+        if self._momentum < 0 and self._momentum > 1.0:
+            sys.exit("Error: In Batchnorm momentum should be in range [0, 1]")
+
+        self._avg_mean = None
+        self._avg_var = None
         self._std_eps = None
         self._X_norm = None
         self._gamma_grad = None
@@ -40,6 +46,14 @@ class BatchNorm(object):
 
     # Getters
     # -------
+    @property
+    def avg_mean(self):
+        return self._avg_mean
+
+    @property
+    def avg_var(self):
+        return self._avg_var
+
     @property
     def gamma(self):
         return self._gamma
@@ -58,6 +72,16 @@ class BatchNorm(object):
 
     # Setters
     # -------
+    @avg_mean.setter
+    def avg_mean(self, avg_mean):
+        assert(avg_mean.shape == self._gamma.shape)
+        self._avg_mean = avg_mean
+
+    @avg_var.setter
+    def avg_var(self, avg_var):
+        assert(avg_var.shape == self._gamma.shape)
+        self._avg_var = avg_var
+
     @gamma.setter
     def gamma(self, g):
         assert(g.shape == self._gamma.shape)
@@ -69,12 +93,31 @@ class BatchNorm(object):
         self._beta = b
 
     def reinitialize_params(self, feature_size):
+        self._avg_mean = None
+        self._avg_var = None
         self._gamma = np.ones(feature_size, dtype=conf.dtype)
         self._beta = np.zeros(feature_size, dtype=conf.dtype)
 
-    def forward(self, X):
-        self._std_eps = np.sqrt(np.var(X, axis=0) + 1e-32)
-        self._X_norm = (X - np.mean(X, axis=0)) / self._std_eps
+    def forward(self, X, inference=False):
+        if inference:
+            if self._avg_mean is None or self._avg_var is None:
+                return X
+            else:
+                X_mean = self._avg_mean
+                X_var = self._avg_var
+        else:
+            X_mean = np.mean(X, axis=0)
+            X_var = np.var(X, axis=0)
+
+            if self._avg_mean is None or self._avg_var is None:
+                self._avg_mean = X_mean
+                self._avg_var = X_var
+            else:
+                self._avg_mean = self._avg_mean * self._momentum + X_mean * (1.0 - self._momentum)
+                self._avg_var = self._avg_var * self._momentum + X_var * (1.0 - self._momentum)
+
+        self._std_eps = np.sqrt(X_var + 1e-32)
+        self._X_norm = (X - X_mean) / self._std_eps
 
         #              (X - μ)
         # BNᵧ,ᵦ(X) = ɣ --------- + 𝛃

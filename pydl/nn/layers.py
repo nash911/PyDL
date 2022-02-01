@@ -201,8 +201,8 @@ class FC(Layer):
         else:
             self._bias = None
 
-        if batchnorm:
-            self._batchnorm = BatchNorm(feature_size=self._num_neurons)
+        if type(batchnorm) in ['int', 'float'] or batchnorm:
+            self._batchnorm = BatchNorm(feature_size=self._num_neurons, momentum=batchnorm)
 
         if dropout is not None and dropout < 1.0:
             self._dropout = Dropout(p=dropout, activation_fn=self._activation_fn.type)
@@ -301,7 +301,7 @@ class FC(Layer):
 
         # Batchnorm
         if self._batchnorm is not None:
-            z = self._batchnorm.forward(z)
+            z = self._batchnorm.forward(z, inference)
 
         # Nonlinearity Activation
         self._output = self._activation_fn.forward(z, temperature)
