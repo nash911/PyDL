@@ -42,15 +42,15 @@ def main():
     weight_scale = 0.01
 
     l1 = FC(X, num_neurons=200, bias=True, weight_scale=weight_scale, xavier=True,
-            activation_fn='ReLU', batchnorm=True)
+            activation_fn='Tanh', batchnorm=True)
     l2 = FC(l1, num_neurons=100, bias=True, weight_scale=weight_scale, xavier=True,
-            activation_fn='ReLU', batchnorm=True)
+            activation_fn='Tanh', batchnorm=True)
     l3 = FC(l2, num_neurons=50, bias=True, weight_scale=weight_scale, xavier=True,
-            activation_fn='ReLU', batchnorm=True)
+            activation_fn='Tanh', batchnorm=True)
     l4 = FC(l3, num_neurons=25, bias=True, weight_scale=weight_scale, xavier=True,
-            activation_fn='ReLU', batchnorm=True)
+            activation_fn='Tanh', batchnorm=True)
     l5 = FC(l4, num_neurons=15, bias=True, weight_scale=weight_scale, xavier=True,
-            activation_fn='ReLU', batchnorm=True)
+            activation_fn='Tanh', batchnorm=True)
     l6 = FC(l5, num_neurons=K, bias=True, weight_scale=weight_scale, xavier=True,
             activation_fn='SoftMax')
     layers = [l1, l2, l3, l4, l5, l6]
