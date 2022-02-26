@@ -24,10 +24,10 @@ class RecurrentTraining(Training):
     """
 
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
-                 activatin_type=None, regression=False, name=None):
+                 activatin_type=None, regression=False, save=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
-                         name=name)
+                         save=save, name=name)
 
     def reset_recurrent_layers(self, hidden_state=None):
         for layer in self._nn.layers:

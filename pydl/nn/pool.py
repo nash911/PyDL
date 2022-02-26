@@ -10,6 +10,7 @@
 import numpy as np
 import sys
 import warnings
+from collections import OrderedDict
 
 from pydl.nn.layers import Layer
 
@@ -101,6 +102,11 @@ class Pool(Layer):
     @property
     def stride(self):
         return self._stride
+
+    @property
+    def activation(self):
+        warnings.warn("\nWARNING! PoolLayer does not have an Activation function. Returning None.")
+        return None
 
     def set_output_volume_shape(self, padding):
         inp_d = self._inp_shape[0]
@@ -293,3 +299,15 @@ class Pool(Layer):
 
     def update_weights(self, alpha):
         pass
+
+    def save(self):
+        if self._layer_dict is None:
+            self._layer_dict = OrderedDict()
+            self._layer_dict['type'] = self._type
+            self._layer_dict['name'] = self._name
+            self._layer_dict['receptive_field'] = self._receptive_field
+            self._layer_dict['pool'] = self._pool
+            self._layer_dict['stride'] = self._stride
+            self._layer_dict['padding'] = self._padding
+
+        return self._layer_dict

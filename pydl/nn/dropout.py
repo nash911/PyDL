@@ -13,8 +13,7 @@ from pydl import conf
 
 
 class Dropout(object):
-    """The Dropout Class
-    """
+    """The Dropout Class."""
 
     def __init__(self, p, activation_fn, name=None):
         self._p = p
@@ -32,7 +31,6 @@ class Dropout(object):
     def mask(self):
         return self._out_mask
 
-
     # Setters
     # -------
     @p.setter
@@ -42,7 +40,6 @@ class Dropout(object):
     @mask.setter
     def mask(self, mask):
         self._out_mask = mask
-
 
     def forward(self, X, mask=None):
         if mask is None:
@@ -57,7 +54,6 @@ class Dropout(object):
         else:
             self._out_mask = mask
         return self._out_mask * X
-
 
     def backward(self, inp_grad, inputs=None):
         if self._out_mask is None:

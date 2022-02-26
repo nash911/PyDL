@@ -7,24 +7,35 @@
 # This code is licensed under MIT license (see LICENSE.txt for details)
 # ------------------------------------------------------------------------
 
+from collections import OrderedDict
+
 from pydl.training.plain_training import PlainTraining
 from pydl.training.recurrent_training import RecurrentTraining
 
 
 class SGD(PlainTraining, RecurrentTraining):
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
-                 activatin_type=None, regression=False, name=None):
+                 activatin_type=None, regression=False, save=False, name=None):
         super().__init__(nn=nn, step_size=step_size, reg_lambda=reg_lambda, train_size=train_size,
                          test_size=test_size, activatin_type=activatin_type, regression=regression,
-                         name=name)
+                         save=save, name=name)
+
+        if save:
+            training_dict = OrderedDict()
+            training_dict['step_size'] = step_size
+            training_dict['reg_lambda'] = reg_lambda
+            training_dict['train_size'] = train_size
+            training_dict['test_size'] = test_size
+            training_dict['regression'] = regression
+            self._save_dict['training'] = training_dict
 
     def train(self, X, y, normalize=None, dims=None, shuffle=True, batch_size=256, epochs=1000,
-              y_onehot=False, plot=None, log_freq=100):
+              y_onehot=False, plot=None, log_freq=100, model_file=None):
         self.prepare_data(X=X, y=y, normalize=normalize, dims=dims, shuffle=shuffle,
                           batch_size=batch_size, y_onehot=y_onehot)
 
         training_logs_dict = super().train(batch_size=batch_size, epochs=epochs, plot=plot,
-                                           log_freq=log_freq)
+                                           log_freq=log_freq, model_file=model_file)
         return training_logs_dict
 
     def train_recurrent(self, X, y=None, batch_size=256, epochs=1000, sample_length=100,

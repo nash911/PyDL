@@ -9,6 +9,7 @@
 
 import numpy as np
 import sys
+from collections import OrderedDict
 
 from pydl.nn.layers import Layer
 from pydl.nn.activations import Linear
@@ -418,3 +419,32 @@ class Conv(Layer):
         self.weights += self._weights_grad * alpha
         if self._has_bias:
             self.bias += self._bias_grad * alpha
+
+    def save(self):
+        if self._layer_dict is None:
+            self._layer_dict = OrderedDict()
+            self._layer_dict['type'] = self._type
+            self._layer_dict['name'] = self._name
+            self._layer_dict['receptive_field'] = self._receptive_field
+            self._layer_dict['num_filters'] = self._num_filters
+            self._layer_dict['stride'] = self._stride
+            self._layer_dict['zero_padding'] = self._zero_padding
+            self._layer_dict['force_adjust_output_shape'] = self._force_adjust_output_shape
+            self._layer_dict['weight_scale'] = self._weight_scale
+            self._layer_dict['xavier'] = self._xavier
+            self._layer_dict['activation_fn'] = self._activation_fn.type
+
+            if self._dropout is not None:
+                self._layer_dict['dropout'] = self._dropout.p
+            else:
+                self._layer_dict['dropout'] = None
+
+        self._layer_dict['weights'] = self._weights.tolist()
+        self._layer_dict['bias'] = self._bias.tolist()
+
+        if self._batchnorm:
+            self._layer_dict['batchnorm'] = self._batchnorm.save()
+        else:
+            self._layer_dict['batchnorm'] = False
+
+        return self._layer_dict

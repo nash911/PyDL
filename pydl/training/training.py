@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import warnings
+from collections import OrderedDict
 
 from pydl import conf
 
@@ -24,11 +25,12 @@ class Training(ABC):
     """
 
     def __init__(self, nn=None, step_size=1e-2, reg_lambda=0, train_size=70, test_size=30,
-                 activatin_type=None, regression=False, name=None):
+                 activatin_type=None, regression=False, save=False, name=None):
         self._nn = nn
         self._step_size = step_size
         self._lambda = reg_lambda
         self._regression = regression
+        self._save = save
         self._name = name
 
         if self._regression:
@@ -61,14 +63,45 @@ class Training(ABC):
             self._train_size = int(train_size)
             self._test_size = int(test_size)
 
+        if save:
+            self._save_dict = OrderedDict()
+            self._save_dict['training'] = None
+            self._save_dict['data'] = None
+            self._save_dict['nn'] = nn.save()
+        else:
+            self._save_dict = None
+
         self._X_raw = None
         self._train_X = self._train_y = self._test_X = self._test_y = None
         self._X_mean = self._X_std = None
         self._X_min = self._X_max = None
         self._scale_range = np.array([-1, 1], dtype=conf.dtype)
 
+        self._X_U = None
+        self._X_S = None
+        self._X_dims = None
+        self._X_whiten = False
+
         self._class_prob = None
         self._prediction_delta = None
+
+    # Getters
+    # -------
+    @property
+    def train_X(self):
+        return self._train_X
+
+    @property
+    def test_X(self):
+        return self._test_X
+
+    @property
+    def train_y(self):
+        return self._train_y
+
+    @property
+    def test_y(self):
+        return self._test_y
 
     def train_size(self, X):
         data_size = X.shape[0]
@@ -150,15 +183,18 @@ class Training(ABC):
     def reduce_data_dimensions(self, X, dims=None, mean=None, U=None, S=None, N=None, whiten=False):
         if mean is None:
             mean = np.mean(X, axis=0, keepdims=True)
+            self._X_mean = mean
 
         if N is None:
             N = X.shape[0]
 
         X -= mean
-        cov = np.matmul(X.T, X) / N
 
         if U is None or S is None:
+            cov = np.matmul(X.T, X) / N
             U, S, V = np.linalg.svd(cov)
+            self._X_U = U
+            self._X_S = S
 
         if type(dims) is float and dims <= 1.0:
             cumulative_ratio = (np.cumsum(S) / np.sum(S)).tolist()
@@ -167,15 +203,18 @@ class Training(ABC):
             print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
                   (dims + 1, (min_ratio) * 100.0))
             dims += 1
+            self._X_dims = dims
         elif type(dims) is int and dims >= 1:
             print("PCA - Reduced to %d dimensions, while retaining %.2f percent information" %
                   (dims, ((np.cumsum(S) / np.sum(S))[dims - 1]) * 100.0))
+            self._X_dims = dims
 
         # Project data on to orthogonal subspace
         X_reduced = np.matmul(X, U[:, :dims])
 
         if whiten:
             X_reduced = X_reduced / np.sqrt(S[:dims] + 1e-4)
+            self._X_whiten = whiten
 
         return mean, U, S, dims, X_reduced
 
@@ -554,3 +593,21 @@ class Training(ABC):
         if plot:
             self.learning_curve_plot(fig, axs, train_loss, test_loss, train_accuracy,
                                      test_accuracy)
+
+    def save_data_params(self):
+        self._data_param_dict = OrderedDict()
+        self._data_param_dict['train_size'] = self._train_size
+        self._data_param_dict['test_size'] = self._test_size
+        self._data_param_dict['normalizer'] = 'pca' if self._X_U is not None else 'mean' if \
+            self._X_mean is not None else 'min_max' if self._X_min is not None else None
+        self._data_param_dict['X_mean'] = None if self._X_mean is None else self._X_mean.tolist()
+        self._data_param_dict['X_std'] = None if self._X_std is None else self._X_std.tolist()
+        self._data_param_dict['X_min'] = None if self._X_min is None else self._X_min.tolist()
+        self._data_param_dict['X_max'] = None if self._X_max is None else self._X_max.tolist()
+        self._data_param_dict['scale_range'] = self._scale_range.tolist()
+        self._data_param_dict['X_U'] = None if self._X_U is None else self._X_U.tolist()
+        self._data_param_dict['X_S'] = None if self._X_S is None else self._X_S.tolist()
+        self._data_param_dict['X_dims'] = self._X_dims
+        self._data_param_dict['X_whiten'] = self._X_whiten
+
+        return self._data_param_dict

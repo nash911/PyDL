@@ -10,6 +10,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import warnings
+from collections import OrderedDict
 
 from pydl.nn.activations import Linear
 from pydl.nn.activations import Sigmoid
@@ -37,6 +38,7 @@ class Layer(ABC):
 
     def __init__(self, name=None):
         self._name = name
+        self._layer_dict = None
 
         self._inputs = None
         self._output = None
@@ -131,6 +133,10 @@ class Layer(ABC):
     @activation.setter
     def activation(self, actvn_fn):
         self._activation_fn = activations[actvn_fn.lower()]()
+
+    @batchnorm.setter
+    def batchnorm(self, btchnrm):
+        self._batchnorm = btchnrm
 
     @dropout_mask.setter
     def dropout_mask(self, d_mask):
@@ -348,3 +354,28 @@ class FC(Layer):
         self.weights += self._weights_grad * alpha
         if self._has_bias:
             self.bias += self._bias_grad * alpha
+
+    def save(self):
+        if self._layer_dict is None:
+            self._layer_dict = OrderedDict()
+            self._layer_dict['type'] = self._type
+            self._layer_dict['name'] = self._name
+            self._layer_dict['num_neurons'] = self._num_neurons
+            self._layer_dict['weight_scale'] = self._weight_scale
+            self._layer_dict['xavier'] = self._xavier
+            self._layer_dict['activation_fn'] = self._activation_fn.type
+
+            if self._dropout is not None:
+                self._layer_dict['dropout'] = self._dropout.p
+            else:
+                self._layer_dict['dropout'] = None
+
+        self._layer_dict['weights'] = self._weights.tolist()
+        self._layer_dict['bias'] = self._bias.tolist()
+
+        if self._batchnorm:
+            self._layer_dict['batchnorm'] = self._batchnorm.save()
+        else:
+            self._layer_dict['batchnorm'] = False
+
+        return self._layer_dict

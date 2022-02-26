@@ -9,6 +9,7 @@
 
 import numpy as np
 import sys
+from collections import OrderedDict
 from pydl import conf
 
 
@@ -36,6 +37,7 @@ class BatchNorm(object):
         if self._momentum < 0 and self._momentum > 1.0:
             sys.exit("Error: In Batchnorm momentum should be in range [0, 1]")
 
+        self._name = name
         self._avg_mean = None
         self._avg_var = None
         self._std_eps = None
@@ -43,6 +45,7 @@ class BatchNorm(object):
         self._gamma_grad = None
         self._beta_grad = None
         self._out_grad = None
+        self._layer_dict = None
 
     # Getters
     # -------
@@ -164,3 +167,16 @@ class BatchNorm(object):
     def update_params(self, alpha):
         self._gamma += self._gamma * alpha
         self._beta += self._beta * alpha
+
+    def save(self):
+        if self._layer_dict is None:
+            self._layer_dict = OrderedDict()
+            self._layer_dict['momentum'] = self._momentum
+            self._layer_dict['name'] = self._name
+
+        self._layer_dict['gamma'] = self._gamma.tolist()
+        self._layer_dict['beta'] = self._beta.tolist()
+        self._layer_dict['avg_mean'] = None if self._avg_mean is None else self._avg_mean.tolist()
+        self._layer_dict['avg_var'] = None if self._avg_var is None else self._avg_var.tolist()
+
+        return self._layer_dict
