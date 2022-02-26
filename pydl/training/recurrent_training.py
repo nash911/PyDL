@@ -100,7 +100,8 @@ class RecurrentTraining(Training):
         self._char_to_idx = {ch: i for i, ch in enumerate(unique_chars)}
         self._idx_to_char = {i: ch for i, ch in enumerate(unique_chars)}
 
-        train_size = self.train_size(X)
+        train_size = \
+            int(data_size * self._train_size) if self._train_size <= 1.0 else self._train_size
         test_size = data_size - train_size
 
         self._train_X = np.zeros((train_size, K), dtype=conf.dtype)
