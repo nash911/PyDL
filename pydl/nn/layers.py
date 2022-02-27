@@ -360,7 +360,7 @@ class FC(Layer):
             self._layer_dict = OrderedDict()
             self._layer_dict['type'] = self._type
             self._layer_dict['name'] = self._name
-            self._layer_dict['num_neurons'] = self._num_neurons
+            self._layer_dict['num_neurons'] = int(self._num_neurons)
             self._layer_dict['weight_scale'] = self._weight_scale
             self._layer_dict['xavier'] = self._xavier
             self._layer_dict['activation_fn'] = self._activation_fn.type

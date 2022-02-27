@@ -426,7 +426,7 @@ class Conv(Layer):
             self._layer_dict['type'] = self._type
             self._layer_dict['name'] = self._name
             self._layer_dict['receptive_field'] = self._receptive_field
-            self._layer_dict['num_filters'] = self._num_filters
+            self._layer_dict['num_filters'] = int(self._num_filters)
             self._layer_dict['stride'] = self._stride
             self._layer_dict['zero_padding'] = self._zero_padding
             self._layer_dict['force_adjust_output_shape'] = self._force_adjust_output_shape

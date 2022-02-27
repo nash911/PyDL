@@ -596,8 +596,10 @@ class Training(ABC):
 
     def save_data_params(self):
         self._data_param_dict = OrderedDict()
-        self._data_param_dict['train_size'] = self._train_size
-        self._data_param_dict['test_size'] = self._test_size
+        self._data_param_dict['train_size'] = \
+            int(self._train_size) if self._train_size > 1.0 else float(self._train_size)
+        self._data_param_dict['test_size'] = \
+            int(self._test_size) if self._test_size > 1.0 else float(self._test_size)
         self._data_param_dict['normalizer'] = 'pca' if self._X_U is not None else 'mean' if \
             self._X_mean is not None else 'min_max' if self._X_min is not None else None
         self._data_param_dict['X_mean'] = None if self._X_mean is None else self._X_mean.tolist()
@@ -607,7 +609,7 @@ class Training(ABC):
         self._data_param_dict['scale_range'] = self._scale_range.tolist()
         self._data_param_dict['X_U'] = None if self._X_U is None else self._X_U.tolist()
         self._data_param_dict['X_S'] = None if self._X_S is None else self._X_S.tolist()
-        self._data_param_dict['X_dims'] = self._X_dims
+        self._data_param_dict['X_dims'] = int(self._X_dims)
         self._data_param_dict['X_whiten'] = self._X_whiten
 
         return self._data_param_dict

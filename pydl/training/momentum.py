@@ -25,11 +25,11 @@ class Momentum(PlainTraining, RecurrentTraining):
 
         if save:
             training_dict = OrderedDict()
-            training_dict['step_size'] = step_size
-            training_dict['mu'] = mu
-            training_dict['reg_lambda'] = reg_lambda
-            training_dict['train_size'] = train_size
-            training_dict['test_size'] = test_size
+            training_dict['step_size'] = float(step_size)
+            training_dict['mu'] = float(mu)
+            training_dict['reg_lambda'] = float(reg_lambda)
+            training_dict['train_size'] = int(train_size) if train_size > 1.0 else float(train_size)
+            training_dict['test_size'] = int(test_size) if test_size > 1.0 else float(test_size)
             training_dict['regression'] = regression
             self._save_dict['training'] = training_dict
 
