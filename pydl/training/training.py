@@ -609,7 +609,7 @@ class Training(ABC):
         self._data_param_dict['scale_range'] = self._scale_range.tolist()
         self._data_param_dict['X_U'] = None if self._X_U is None else self._X_U.tolist()
         self._data_param_dict['X_S'] = None if self._X_S is None else self._X_S.tolist()
-        self._data_param_dict['X_dims'] = int(self._X_dims)
+        self._data_param_dict['X_dims'] = None if self._X_dims is None else int(self._X_dims)
         self._data_param_dict['X_whiten'] = self._X_whiten
 
         return self._data_param_dict
