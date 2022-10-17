@@ -9,8 +9,6 @@
 
 from abc import ABC, abstractmethod
 
-import numpy as np
-
 
 class Loss(ABC):
     def __init__(self, reg_lambda=0, name=None):

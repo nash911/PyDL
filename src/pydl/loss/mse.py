@@ -9,7 +9,7 @@
 
 import numpy as np
 
-from pyrl.loss.loss import Loss
+from pydl.loss.loss import Loss
 
 
 class MSE(Loss):

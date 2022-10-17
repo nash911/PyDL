@@ -9,7 +9,7 @@
 
 import numpy as np
 
-from pyrl.optimizer.optimizer import Optimizer
+from pydl.optimizer.optimizer import Optimizer
 
 
 class Adam(Optimizer):

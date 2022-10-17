@@ -7,9 +7,7 @@
 # This code is licensed under MIT license (see LICENSE.txt for details)
 # ------------------------------------------------------------------------
 
-import numpy as np
-
-from pyrl.optimizer.optimizer import Optimizer
+from pydl.optimizer.optimizer import Optimizer
 
 
 class SGD(Optimizer):

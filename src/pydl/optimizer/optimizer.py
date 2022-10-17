@@ -9,8 +9,6 @@
 
 from abc import ABC, abstractmethod
 
-import numpy as np
-
 
 class Optimizer(ABC):
     def __init__(self, step_size=1e-4, name=None):
